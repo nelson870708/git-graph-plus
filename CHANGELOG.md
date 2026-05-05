@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.3 (2026-05-05)
+
+### New Features
+- **Reflog Sub-action Column** — Added a dedicated column for detailed Git operations like `amend`, `squash`, `cherry-pick`, and `rebase` stages
+- **Semantic Color Grouping** — Reflog sub-actions are now color-coded by intent (Edit: Orange, Combine: Purple, Integrate: Cyan, Flow: Grey, Abort: Red)
+- **Recursive Submodule Discovery** — Auto-detect submodules recursively using `git submodule status --recursive` for better workspace coverage
+- **Precision Repo Verification** — Improved nested repository detection using `git rev-parse` to accurately identify independent Git roots
+
+### Improvements
+- **Responsive Typography** — Reflog and Graph views now adapt to VS Code's global font size and family settings
+- **Multi-repo Sync** — Sidebar views and commands now automatically synchronize when switching between repositories via the toolbar
+- **Contextual Initialization** — Automatically opens the repository associated with the active text editor on startup
+- **Reflog Layout** — Headers are now sticky and aligned perfectly with rows regardless of scrollbar visibility
+- **Repository Naming** — Improved de-duplication for repositories with the same folder name by prepending parent path segments
+- **Action Filters** — Added `revert` to the Reflog action filter and fixed various truncation issues for long action names
+- **Repository Icons** — Distinct icons added for Root, Nested, and Submodule repository types in the selector
+- **Sidebar UX** — Branch folders now automatically expand to reveal the currently checked-out branch
+
+### Bug Fixes
+- **Row Alignment** — Fixed an issue where dangling commit indicators would shift row content or appear clipped at the bottom
+- **Svelte Reactivity** — Fixed a reactivity warning in the Reset Modal when using Svelte 5 runes
+
 ## 0.3.2 (2026-05-03)
 
 ### New Features
