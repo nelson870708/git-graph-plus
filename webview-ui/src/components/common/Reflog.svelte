@@ -47,7 +47,7 @@
   let activeActions    = $state<Set<string>>(new Set());
   let danglingOnly     = $state(false);
 
-  const ACTION_TYPES = ['commit', 'checkout', 'reset', 'rebase', 'merge', 'cherry-pick', 'stash', 'pull'] as const;
+  const ACTION_TYPES = ['commit', 'checkout', 'reset', 'rebase', 'merge', 'cherry-pick', 'revert', 'stash', 'pull'] as const;
 
   const refOptions = $derived([
     'HEAD',
@@ -88,6 +88,7 @@
     rebase:        { color: '#9c27b0' },
     reset:         { color: '#f44336' },
     merge:         { color: '#ff9800' },
+    revert:        { color: '#e91e63' },
     pull:          { color: '#00bcd4' },
     'cherry-pick': { color: '#8bc34a' },
     stash:         { color: '#795548' },
@@ -100,9 +101,17 @@
     return message.split(':')[0] ?? 'other';
   }
 
-  function parseAction(message: string): { type: string; color: string } {
+  function parseAction(message: string): { type: string; color: string; subType?: string } {
     const type = parseActionType(message);
-    return { type, color: ACTION_MAP[type]?.color ?? '#9e9e9e' };
+    let subType: string | undefined;
+
+    // Extract sub-action in parentheses: e.g., commit (amend) -> amend
+    const match = message.match(/^[^(:]+\(([^)]+)\)/);
+    if (match) {
+      subType = match[1];
+    }
+
+    return { type, color: ACTION_MAP[type]?.color ?? '#9e9e9e', subType };
   }
 
   function getDisplayMessage(message: string): string {
@@ -336,15 +345,16 @@
       {entries.length === 0 ? t('reflog.empty') : t('reflog.noMatches')}
     </div>
   {:else}
-    <div class="reflog-header">
-      <div class="col-idx">#</div>
-      <div class="col-action">{t('reflog.action')}</div>
-      <div class="col-description">{t('graph.description')}</div>
-      <div class="col-hash">{t('graph.sha')}</div>
-      <div class="col-date">{t('reflog.elapsed')}</div>
-    </div>
-
     <div class="reflog-list" role="list">
+      <div class="reflog-header">
+        <div class="col-idx">#</div>
+        <div class="col-action">{t('reflog.action')}</div>
+        <div class="col-subaction">{t('reflog.subAction')}</div>
+        <div class="col-description">{t('graph.description')}</div>
+        <div class="col-hash">{t('graph.sha')}</div>
+        <div class="col-date">{t('reflog.elapsed')}</div>
+      </div>
+
       {#each filteredEntries as entry (entry.selector)}
         {@const action = parseAction(entry.message)}
         {@const displayMsg = getDisplayMessage(entry.message)}
@@ -361,6 +371,15 @@
           <div class="col-action">
             <span class="action-dot" style="background: {action.color}"></span>
             <span class="action-type">{action.type}</span>
+          </div>
+          <div class="col-subaction">
+            {#if action.subType}
+              <span class="sub-action-tag {action.subType}">
+                {action.subType === 'amend' ? t('reflog.amend') : action.subType}
+              </span>
+            {:else}
+              <span class="sub-action-none">-</span>
+            {/if}
           </div>
           <div class="col-description">
             {#if entry.dangling}
@@ -748,17 +767,28 @@
     flex-shrink: 0;
     text-transform: uppercase;
     color: var(--text-secondary);
+    font-size: 0.9em;
+    font-weight: 600;
     user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
   }
 
   /* ── 행 ─────────────────────────────────────────────── */
-  .reflog-list { flex: 1; overflow-y: auto; }
+  .reflog-list { 
+    flex: 1; 
+    overflow-y: auto; 
+    overflow-x: hidden;
+    position: relative;
+  }
 
   .reflog-row {
     display: flex;
     align-items: center;
-    height: 30px;
+    height: 28px;
     border-bottom: 1px solid var(--border-color);
+    position: relative;
     cursor: default;
     user-select: none;
     transition: background 0.08s;
@@ -768,7 +798,16 @@
 
   .reflog-row.dangling {
     background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #ff9800) 8%, transparent);
-    border-left: 2px solid var(--vscode-editorWarning-foreground, #ff9800);
+  }
+
+  .reflog-row.dangling::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--vscode-editorWarning-foreground, #ff9800);
   }
 
   .reflog-row.dangling:hover {
@@ -777,7 +816,7 @@
 
   .dangling-icon {
     color: var(--vscode-editorWarning-foreground, #ff9800);
-    font-size: 11px;
+    font-size: 1em;
     flex-shrink: 0;
     margin-right: 4px;
   }
@@ -788,18 +827,28 @@
     flex-shrink: 0;
     padding: 0 10px 0 6px;
     font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 1em;
     color: var(--text-secondary);
     text-align: right;
     opacity: 0.7;
   }
 
   .col-action {
-    width: 90px;
+    width: 120px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 5px;
-    padding: 0 10px;
+    gap: 6px;
+    padding: 0 5px 0 10px;
+    overflow: hidden;
+  }
+
+  .col-subaction {
+    width: 100px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 10px 0 5px;
     overflow: hidden;
   }
 
@@ -829,16 +878,88 @@
   }
 
   .action-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
   }
 
   .action-type {
-    color: var(--text-secondary);
+    color: var(--vscode-foreground);
+    font-size: inherit;
+    font-weight: 500;
+    text-transform: capitalize;
     flex-shrink: 0;
+  }
+
+  .sub-action-tag {
+    font-size: 0.95em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    text-transform: lowercase;
+    opacity: 0.7;
+    line-height: 1.2;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  /* Sub-action Groups */
+  /* 1. Edit (Muted Orange) - Modifying content/message */
+  .sub-action-tag.amend,
+  .sub-action-tag.reword,
+  .sub-action-tag.edit {
+    background: color-mix(in srgb, #ff9800 12%, transparent);
+    color: #ce9178;
+    border-color: color-mix(in srgb, #ff9800 20%, transparent);
+    opacity: 1;
+  }
+
+  /* 2. Combine (Muted Purple) - Structural changes */
+  .sub-action-tag.squash,
+  .sub-action-tag.fixup {
+    background: color-mix(in srgb, #9c27b0 12%, transparent);
+    color: #c586c0;
+    border-color: color-mix(in srgb, #9c27b0 20%, transparent);
+    opacity: 1;
+  }
+
+  /* 3. Integrate (Muted Cyan) - External input */
+  .sub-action-tag.merge,
+  .sub-action-tag.cherry-pick,
+  .sub-action-tag.revert {
+    background: color-mix(in srgb, #00bcd4 12%, transparent);
+    color: #4ec9b0;
+    border-color: color-mix(in srgb, #00bcd4 20%, transparent);
+    opacity: 1;
+  }
+
+  /* 4. Standard Progress (Grey/Neutral) - Lifecycle/Flow */
+  .sub-action-tag.initial,
+  .sub-action-tag.resume,
+  .sub-action-tag.pick,
+  .sub-action-tag.start,
+  .sub-action-tag.finish,
+  .sub-action-tag.continue {
+    background: color-mix(in srgb, var(--vscode-foreground, #cccccc) 10%, transparent);
+    color: var(--text-secondary);
+    border-color: color-mix(in srgb, var(--vscode-foreground, #cccccc) 15%, transparent);
     opacity: 0.8;
+  }
+
+  /* 5. Abort/Danger (Muted Red) */
+  .sub-action-tag.abort {
+    background: color-mix(in srgb, #f44336 10%, transparent);
+    color: var(--vscode-errorForeground, #f44336);
+    border-color: color-mix(in srgb, #f44336 20%, transparent);
+    opacity: 1;
+  }
+
+  .sub-action-none {
+    opacity: 0.4;
+    padding-left: 6px;
+    font-size: inherit;
   }
 
   .reflog-msg {

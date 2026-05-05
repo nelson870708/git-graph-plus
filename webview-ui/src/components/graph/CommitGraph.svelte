@@ -1261,8 +1261,8 @@
     height: 32px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
-    font-size: 11px;
-    font-weight: normal;
+    font-size: 0.9em;
+    font-weight: 600;
     text-transform: uppercase;
     color: var(--text-secondary);
     position: sticky;
@@ -1441,7 +1441,7 @@
     gap: 3px;
     padding: 1px 7px;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 0.95em;
     font-weight: normal;
     white-space: nowrap;
     flex-shrink: 0;
@@ -1502,7 +1502,7 @@
   }
 
   .ref-icon {
-    font-size: 12px;
+    font-size: 1em;
     flex-shrink: 0;
   }
 
@@ -1529,7 +1529,7 @@
 
   .compare-label {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 0.9em;
   }
 
   .compare-hash {
@@ -1576,7 +1576,7 @@
 
   .bisect-indicator-label {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: 0.9em;
   }
 
   .bisect-indicator-hash {
