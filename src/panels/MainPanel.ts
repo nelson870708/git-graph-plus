@@ -4,13 +4,14 @@ import { readFile, access } from 'fs/promises';
 import { GitService, GitError } from '../git/git-service';
 import { buildGraph, buildGraphFromGitOutput, buildFullGraph, buildGraphFromFullData } from '../git/git-graph-builder';
 import { FileWatcher } from '../services/file-watcher';
-import { RepoDiscoveryService } from '../services/repo-discovery';
+import { RepoDiscoveryService, RepoInfo } from '../services/repo-discovery';
 import type { WebviewMessage } from '../utils/message-bus';
 
 export class MainPanel {
   public static currentPanel: MainPanel | undefined;
   private static readonly viewType = 'gitGraphPlus';
   private static savedRemoteFilter: string[] | undefined = undefined;
+  private static extraEnv: Record<string, string> | undefined = undefined;
 
   private readonly panel: vscode.WebviewPanel;
   private readonly extensionUri: vscode.Uri;
@@ -23,7 +24,16 @@ export class MainPanel {
   private currentRemoteFilter: string[] | undefined = undefined;
   private isFirstGetLog = true;
   private logSequence = 0;
+  private cachedRepos: RepoInfo[] = [];
   public static onSidebarRefresh: (() => void) | null = null;
+  public static onRepoChange: ((repoPath: string) => void) | null = null;
+
+  public static setExtraEnv(env: Record<string, string>): void {
+    this.extraEnv = env;
+    if (this.currentPanel) {
+      this.currentPanel.gitService.setExtraEnv(env);
+    }
+  }
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -34,6 +44,9 @@ export class MainPanel {
     this.extensionUri = extensionUri;
     this.repoPath = repoPath;
     this.gitService = new GitService(repoPath);
+    if (MainPanel.extraEnv) {
+      this.gitService.setExtraEnv(MainPanel.extraEnv);
+    }
 
     this.fileWatcher = new FileWatcher(repoPath, (what) => {
       this.onRepoChanged(what);
@@ -78,13 +91,26 @@ export class MainPanel {
   }
 
   public static createOrShow(extensionUri: vscode.Uri): void {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (!workspaceFolder) {
+    let repoPath: string | undefined;
+
+    // Try to find the repo associated with the active editor
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor) {
+      const workspaceFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
+      if (workspaceFolder) {
+        repoPath = workspaceFolder.uri.fsPath;
+      }
+    }
+
+    // Fallback to first workspace folder
+    if (!repoPath) {
+      repoPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    }
+
+    if (!repoPath) {
       vscode.window.showWarningMessage('Git Graph+: No workspace folder open.');
       return;
     }
-
-    const repoPath = workspaceFolder.uri.fsPath;
 
     if (MainPanel.currentPanel) {
       MainPanel.currentPanel.panel.reveal(vscode.ViewColumn.One);
@@ -199,7 +225,7 @@ export class MainPanel {
           break;
         }
         case 'getRepoList': {
-          await this.sendRepoList();
+          await this.sendRepoList(true);
           break;
         }
         case 'getCommitDiff': {
@@ -832,6 +858,16 @@ export class MainPanel {
           const newPath = message.payload.path;
           this.repoPath = newPath;
           this.gitService = new GitService(newPath);
+          if (MainPanel.extraEnv) {
+            this.gitService.setExtraEnv(MainPanel.extraEnv);
+          }
+
+          // Reset repo-specific state
+          this.allConflictFiles = [];
+          this.isFirstGetLog = true;
+          this.currentRemoteFilter = undefined;
+          this.logSequence = 0;
+
           const oldWatcher = this.fileWatcher;
           oldWatcher.dispose();
           const oldIdx = this.disposables.indexOf(oldWatcher);
@@ -841,9 +877,17 @@ export class MainPanel {
           });
           this.fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
           this.disposables.push(this.fileWatcher);
+          
+          MainPanel.onRepoChange?.(newPath);
+
+          // Update repo list in webview with cached repos but new active path
+          // Send this BEFORE refreshAll so the dropdown updates instantly
+          this.panel.webview.postMessage({
+            type: 'repoList',
+            payload: { repos: this.cachedRepos, active: this.repoPath },
+          });
+
           await this.refreshAll();
-          // Re-send cached repo list with updated active path
-          await this.sendRepoList();
           break;
         }
         case 'stageFile': {
@@ -1068,7 +1112,6 @@ export class MainPanel {
           branchData: { branches, tags, remotes, stashes, worktrees },
         },
       });
-      this.sendRepoList();
       MainPanel.onSidebarRefresh?.();
     } catch (err) {
       console.warn('Git Graph+: refresh failed:', err instanceof Error ? err.message : err);
@@ -1083,23 +1126,26 @@ export class MainPanel {
 
   private repoListPending: Promise<void> | null = null;
 
-  private sendRepoList(): Promise<void> {
+  private sendRepoList(forceDiscovery = false): Promise<void> {
     // Deduplicate concurrent calls
     if (!this.repoListPending) {
-      this.repoListPending = this.doSendRepoList().finally(() => { this.repoListPending = null; });
+      this.repoListPending = this.doSendRepoList(forceDiscovery).finally(() => { this.repoListPending = null; });
     }
     return this.repoListPending;
   }
 
-  private async doSendRepoList(): Promise<void> {
+  private async doSendRepoList(forceDiscovery = false): Promise<void> {
     try {
-      RepoDiscoveryService.clearCache();
+      if (forceDiscovery) {
+        RepoDiscoveryService.clearCache();
+      }
       const workspacePaths = new Set<string>();
       for (const f of vscode.workspace.workspaceFolders ?? []) {
         workspacePaths.add(f.uri.fsPath);
       }
       workspacePaths.add(this.repoPath);
       const repos = await RepoDiscoveryService.discoverRepos([...workspacePaths]);
+      this.cachedRepos = repos;
       this.panel.webview.postMessage({
         type: 'repoList',
         payload: { repos, active: this.repoPath },

@@ -18,7 +18,7 @@ const IGNORED_DIRS = new Set([
 const MAX_DEPTH = 1;
 
 export class RepoDiscoveryService {
-  private static cache: { repos: RepoInfo[]; rootPath: string } | null = null;
+  private static cache: { repos: RepoInfo[]; cacheKey: string } | null = null;
 
   /**
    * Discover all git repositories within the given workspace folders.
@@ -26,8 +26,8 @@ export class RepoDiscoveryService {
    * Results are cached until clearCache() is called.
    */
   static async discoverRepos(folderPaths: string[]): Promise<RepoInfo[]> {
-    const rootPath = folderPaths[0] ?? '';
-    if (this.cache && this.cache.rootPath === rootPath) {
+    const cacheKey = [...folderPaths].sort().join(';');
+    if (this.cache && this.cache.cacheKey === cacheKey) {
       return this.cache.repos;
     }
 
@@ -73,7 +73,19 @@ export class RepoDiscoveryService {
     const typeOrder: Record<RepoType, number> = { root: 0, nested: 1, submodule: 2 };
     repos.sort((a, b) => typeOrder[a.type] - typeOrder[b.type] || a.name.localeCompare(b.name));
 
-    this.cache = { repos, rootPath };
+    // De-duplicate names by adding parent directory if needed
+    const nameCounts = new Map<string, number>();
+    for (const repo of repos) {
+      nameCounts.set(repo.name, (nameCounts.get(repo.name) || 0) + 1);
+    }
+    for (const repo of repos) {
+      if ((nameCounts.get(repo.name) ?? 0) > 1) {
+        const parentDir = path.basename(path.dirname(repo.path));
+        repo.name = `${parentDir}/${repo.name}`;
+      }
+    }
+
+    this.cache = { repos, cacheKey };
     return repos;
   }
 

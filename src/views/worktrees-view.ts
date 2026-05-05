@@ -8,8 +8,9 @@ export class WorktreesViewProvider implements vscode.TreeDataProvider<WorktreeIt
 
   constructor(private gitService: GitService) {}
 
-  setGitService(service: GitService) {
-    this.gitService = service;
+  public setGitService(gitService: GitService): void {
+    this.gitService = gitService;
+    this.cache = null;
     this.refresh();
   }
 

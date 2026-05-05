@@ -9,8 +9,15 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private cache: BranchTreeItem[] | null = null;
   private pending: Promise<void> | null = null;
+  private currentItem: BranchLeafItem | null = null;
 
   constructor(private gitService: GitService) {}
+
+  public setGitService(gitService: GitService): void {
+    this.gitService = gitService;
+    this.cache = null;
+    this.refresh();
+  }
 
   private fetchId = 0;
 
@@ -25,12 +32,18 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     return this.pending;
   }
 
+  public getCurrentItem(): BranchLeafItem | null {
+    return this.currentItem;
+  }
+
   private async doFetch(): Promise<void> {
     const id = ++this.fetchId;
     try {
       const branches = await this.gitService.branches();
       if (id !== this.fetchId) return; // superseded by newer request
-      this.cache = buildBranchTree(branches.filter(b => !b.remote));
+      const { items, currentItem } = buildBranchTree(branches.filter(b => !b.remote));
+      this.cache = items;
+      this.currentItem = currentItem;
       const current = branches.find(b => b.current && !b.remote);
       vscode.commands.executeCommand('setContext', 'gitGraphPlus.currentBranchHasUpstream', current ? !!current.upstream : true);
     } catch { /* keep old cache */ }
@@ -48,6 +61,10 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     return element;
   }
 
+  getParent(element: BranchTreeItem): BranchTreeItem | undefined {
+    return element.parent;
+  }
+
   async getChildren(element?: BranchTreeItem): Promise<BranchTreeItem[]> {
     if (element instanceof BranchFolderItem) {
       return element.children;
@@ -58,7 +75,9 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     // Direct fetch as fallback - always returns data
     try {
       const branches = await this.gitService.branches();
-      this.cache = buildBranchTree(branches.filter(b => !b.remote));
+      const { items, currentItem } = buildBranchTree(branches.filter(b => !b.remote));
+      this.cache = items;
+      this.currentItem = currentItem;
     } catch { /* ignore */ }
     return this.cache ?? [];
   }
@@ -66,9 +85,8 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
 
 /**
  * Builds a hierarchical folder tree from flat branch names.
- * e.g., feature/login, feature/signup → folder "feature" with children "login", "signup"
  */
-function buildBranchTree(branches: BranchInfo[]): BranchTreeItem[] {
+function buildBranchTree(branches: BranchInfo[]): { items: BranchTreeItem[]; currentItem: BranchLeafItem | null } {
   interface FolderNode {
     branches: BranchInfo[];
     subfolders: Map<string, FolderNode>;
@@ -88,12 +106,46 @@ function buildBranchTree(branches: BranchInfo[]): BranchTreeItem[] {
         }
         node = node.subfolders.get(parts[i])!;
       }
-      // Store branch with display name as last part
       node.branches.push(branch);
     }
   }
 
-  return renderNode(root);
+  let currentItem: BranchLeafItem | null = null;
+
+  function render(node: FolderNode, parent?: BranchFolderItem): BranchTreeItem[] {
+    const sortedBranches = [...node.branches].sort((a, b) => {
+      const nameA = a.name.includes('/') ? a.name.split('/').pop()! : a.name;
+      const nameB = b.name.includes('/') ? b.name.split('/').pop()! : b.name;
+      const [orderA, lowerA] = branchSortKey(nameA);
+      const [orderB, lowerB] = branchSortKey(nameB);
+      if (orderA !== orderB) { return orderA - orderB; }
+      return lowerA.localeCompare(lowerB);
+    });
+
+    const sortedFolders = [...node.subfolders.entries()].sort((a, b) =>
+      a[0].toLowerCase().localeCompare(b[0].toLowerCase())
+    );
+
+    const items: BranchTreeItem[] = [];
+
+    for (const branch of sortedBranches) {
+      const displayName = branch.name.includes('/') ? branch.name.split('/').pop()! : branch.name;
+      const item = new BranchLeafItem(branch, displayName, parent);
+      if (branch.current) { currentItem = item; }
+      items.push(item);
+    }
+
+    for (const [name, sub] of sortedFolders) {
+      const folderItem = new BranchFolderItem(name, parent);
+      folderItem.children = render(sub, folderItem);
+      items.push(folderItem);
+    }
+
+    return items;
+  }
+
+  const items = render(root);
+  return { items, currentItem };
 }
 
 const PRIMARY_BRANCHES = ['main', 'master', 'develop', 'dev', 'trunk'];
@@ -104,43 +156,11 @@ function branchSortKey(name: string): [number, string] {
   return [1, lower];
 }
 
-function renderNode(node: { branches: BranchInfo[]; subfolders: Map<string, any> }): BranchTreeItem[] {
-  // Sort leaf branches: main/master first, develop/dev second, then alphabetical
-  const sortedBranches = [...node.branches].sort((a, b) => {
-    const nameA = a.name.includes('/') ? a.name.split('/').pop()! : a.name;
-    const nameB = b.name.includes('/') ? b.name.split('/').pop()! : b.name;
-    const [orderA, lowerA] = branchSortKey(nameA);
-    const [orderB, lowerB] = branchSortKey(nameB);
-    if (orderA !== orderB) { return orderA - orderB; }
-    return lowerA.localeCompare(lowerB);
-  });
-
-  // Sort folders alphabetically
-  const sortedFolders = [...node.subfolders.entries()].sort((a, b) =>
-    a[0].toLowerCase().localeCompare(b[0].toLowerCase())
-  );
-
-  const items: BranchTreeItem[] = [];
-
-  // Leaf branches first (so main/master appears at top)
-  for (const branch of sortedBranches) {
-    const displayName = branch.name.includes('/') ? branch.name.split('/').pop()! : branch.name;
-    items.push(new BranchLeafItem(branch, displayName));
-  }
-
-  // Then folders
-  for (const [name, sub] of sortedFolders) {
-    const children = renderNode(sub);
-    items.push(new BranchFolderItem(name, children));
-  }
-
-  return items;
-}
-
 class BranchFolderItem extends vscode.TreeItem {
+  public children: BranchTreeItem[] = [];
   constructor(
     public readonly folderName: string,
-    public readonly children: BranchTreeItem[]
+    public readonly parent?: BranchFolderItem
   ) {
     super(folderName, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'branch-folder';
@@ -149,11 +169,16 @@ class BranchFolderItem extends vscode.TreeItem {
 }
 
 class BranchLeafItem extends vscode.TreeItem {
-  constructor(public readonly branch: BranchInfo, displayName: string) {
+  constructor(
+    public readonly branch: BranchInfo,
+    displayName: string,
+    public readonly parent?: BranchFolderItem
+  ) {
     super(displayName, vscode.TreeItemCollapsibleState.None);
 
     this.contextValue = branch.current ? 'branch-current' : 'branch';
     this.iconPath = new vscode.ThemeIcon(branch.current ? 'check' : 'git-branch');
+
 
     if (branch.current) {
       this.description = 'current';

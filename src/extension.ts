@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { MainPanel } from './panels/MainPanel';
 import { GitContentProvider } from './services/git-content-provider';
 import { GitService } from './git/git-service';
@@ -21,8 +22,8 @@ export function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  const repoPath = workspaceFolder.uri.fsPath;
-  const gitService = new GitService(repoPath);
+  let activeRepoPath = workspaceFolder.uri.fsPath;
+  let activeGitService = new GitService(activeRepoPath);
 
   // Inject VS Code's built-in git extension askpass env so authentication prompts work
   const builtinGit = vscode.extensions.getExtension('vscode.git');
@@ -31,7 +32,10 @@ export function activate(context: vscode.ExtensionContext) {
     waitForGit.then((ext: { getAPI(version: number): { git: { env?: Record<string, string> } } }) => {
       try {
         const env = ext.getAPI(1)?.git?.env;
-        if (env) { gitService.setExtraEnv(env); }
+        if (env) {
+          activeGitService.setExtraEnv(env);
+          MainPanel.setExtraEnv(env);
+        }
       } catch { /* built-in git extension API unavailable */ }
     }).catch(() => {});
   }
@@ -43,11 +47,24 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // --- Tree View Providers ---
-  const branchesProvider = new BranchesViewProvider(gitService);
-  const remotesProvider = new RemotesViewProvider(gitService);
-  const tagsProvider = new TagsViewProvider(gitService);
-  const stashesProvider = new StashesViewProvider(gitService);
-  const worktreesProvider = new WorktreesViewProvider(gitService);
+  const branchesProvider = new BranchesViewProvider(activeGitService);
+  const remotesProvider = new RemotesViewProvider(activeGitService);
+  const tagsProvider = new TagsViewProvider(activeGitService);
+  const stashesProvider = new StashesViewProvider(activeGitService);
+  const worktreesProvider = new WorktreesViewProvider(activeGitService);
+
+  const branchesView = vscode.window.createTreeView('gitGraphPlus.branches', { treeDataProvider: branchesProvider });
+  const remotesView = vscode.window.createTreeView('gitGraphPlus.remotes', { treeDataProvider: remotesProvider });
+  const tagsView = vscode.window.createTreeView('gitGraphPlus.tags', { treeDataProvider: tagsProvider });
+  const stashesView = vscode.window.createTreeView('gitGraphPlus.stashes', { treeDataProvider: stashesProvider });
+  const worktreesView = vscode.window.createTreeView('gitGraphPlus.worktrees', { treeDataProvider: worktreesProvider });
+
+  const initialRepoName = path.basename(activeRepoPath);
+  branchesView.description = initialRepoName;
+  remotesView.description = initialRepoName;
+  tagsView.description = initialRepoName;
+  stashesView.description = initialRepoName;
+  worktreesView.description = initialRepoName;
 
   context.subscriptions.push(
     branchesProvider,
@@ -55,11 +72,11 @@ export function activate(context: vscode.ExtensionContext) {
     tagsProvider,
     stashesProvider,
     worktreesProvider,
-    vscode.window.createTreeView('gitGraphPlus.branches', { treeDataProvider: branchesProvider }),
-    vscode.window.createTreeView('gitGraphPlus.remotes', { treeDataProvider: remotesProvider }),
-    vscode.window.createTreeView('gitGraphPlus.tags', { treeDataProvider: tagsProvider }),
-    vscode.window.createTreeView('gitGraphPlus.stashes', { treeDataProvider: stashesProvider }),
-    vscode.window.createTreeView('gitGraphPlus.worktrees', { treeDataProvider: worktreesProvider }),
+    branchesView,
+    remotesView,
+    tagsView,
+    stashesView,
+    worktreesView,
   );
 
   // Prefetch all tree view data in parallel so first expand is instant
@@ -72,26 +89,77 @@ export function activate(context: vscode.ExtensionContext) {
   ]).catch(() => {});
 
   // --- File Watcher ---
-  const fileWatcher = new FileWatcher(repoPath, () => {
+  let fileWatcher = new FileWatcher(activeRepoPath, () => {
     refreshAll();
   });
   fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
-  context.subscriptions.push(fileWatcher);
+  context.subscriptions.push({ dispose: () => fileWatcher.dispose() });
 
   let sidebarRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   function refreshAll() {
     if (sidebarRefreshTimer) { clearTimeout(sidebarRefreshTimer); }
-    sidebarRefreshTimer = setTimeout(() => {
+    sidebarRefreshTimer = setTimeout(async () => {
       sidebarRefreshTimer = null;
-      branchesProvider.refresh();
-      remotesProvider.refresh();
-      tagsProvider.refresh();
-      stashesProvider.refresh();
-      worktreesProvider.refresh();
+      
+      // Refresh all providers
+      await Promise.all([
+        branchesProvider.refresh(),
+        remotesProvider.refresh(),
+        tagsProvider.refresh(),
+        stashesProvider.refresh(),
+        worktreesProvider.refresh(),
+      ]);
+
+      // Reveal current branch in sidebar (auto-expands folders)
+      // ONLY if the view is already visible to prevent jumping to the SCM tab
+      const currentItem = branchesProvider.getCurrentItem();
+      if (currentItem && branchesView.visible) {
+        // Small delay to ensure the tree view has processed the data change
+        setTimeout(() => {
+          branchesView.reveal(currentItem, { select: false, focus: false, expand: true }).then(undefined, () => {});
+        }, 100);
+      }
     }, 300);
   }
 
   MainPanel.onSidebarRefresh = refreshAll;
+  MainPanel.onRepoChange = (newPath: string) => {
+    activeRepoPath = newPath;
+    activeGitService = new GitService(newPath);
+
+    // Re-inject VS Code's built-in git extension askpass env for the new service
+    if (builtinGit) {
+      const ext = builtinGit.exports;
+      if (ext) {
+        try {
+          const env = ext.getAPI(1)?.git?.env;
+          if (env) { activeGitService.setExtraEnv(env); }
+        } catch { /* ignore */ }
+      }
+    }
+
+    // Update providers
+    branchesProvider.setGitService(activeGitService);
+    remotesProvider.setGitService(activeGitService);
+    tagsProvider.setGitService(activeGitService);
+    stashesProvider.setGitService(activeGitService);
+    worktreesProvider.setGitService(activeGitService);
+
+    // Update view descriptions
+    const repoName = path.basename(newPath);
+    branchesView.description = repoName;
+    remotesView.description = repoName;
+    tagsView.description = repoName;
+    stashesView.description = repoName;
+    worktreesView.description = repoName;
+
+    // Update file watcher
+    fileWatcher.dispose();
+    fileWatcher = new FileWatcher(newPath, () => {
+      refreshAll();
+    });
+    fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
+  };
 
   // --- Auto Fetch ---
   let bgFetching = false;
@@ -107,7 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (bgFetching) { return; }
       bgFetching = true;
       try {
-        await gitService.fetch(undefined, { prune: true });
+        await activeGitService.fetch(undefined, { prune: true });
         refreshAll();
         MainPanel.currentPanel?.postRefresh();
       } catch (err) {
@@ -166,13 +234,13 @@ export function activate(context: vscode.ExtensionContext) {
       const ref = typeof refOrItem === 'string' ? refOrItem : refOrItem?.branch?.name;
       if (!ref) { return; }
       try {
-        const isRemote = await gitService.isRemoteBranch(ref);
+        const isRemote = await activeGitService.isRemoteBranch(ref);
         if (isRemote) {
           const slashIndex = ref.indexOf('/');
           const localName = ref.substring(slashIndex + 1);
           MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: ref, localName });
         } else {
-          await gitService.checkout(ref);
+          await activeGitService.checkout(ref);
           refreshAll();
           MainPanel.currentPanel?.postRefresh();
         }
@@ -213,7 +281,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!tagName) { return; }
 
       try {
-        const remotes = await gitService.remotes();
+        const remotes = await activeGitService.remotes();
         if (remotes.length === 0) {
           vscode.window.showErrorMessage(vscode.l10n.t('noRemotes'));
           return;
@@ -229,7 +297,7 @@ export function activate(context: vscode.ExtensionContext) {
         } else if (remotes.length === 1) {
           remote = remotes[0].name;
         }
-        await gitService.pushTag(tagName, remote);
+        await activeGitService.pushTag(tagName, remote);
         vscode.window.showInformationMessage(vscode.l10n.t('tagPushed', tagName, remote));
         refreshAll();
       } catch (err: unknown) {
@@ -239,7 +307,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('gitGraphPlus.pushAllTags', async () => {
       try {
-        const remotes = await gitService.remotes();
+        const remotes = await activeGitService.remotes();
         if (remotes.length === 0) {
           vscode.window.showErrorMessage(vscode.l10n.t('noRemotes'));
           return;
@@ -255,7 +323,7 @@ export function activate(context: vscode.ExtensionContext) {
         } else if (remotes.length === 1) {
           remote = remotes[0].name;
         }
-        await gitService.pushAllTags(remote);
+        await activeGitService.pushAllTags(remote);
         vscode.window.showInformationMessage(vscode.l10n.t('allTagsPushed', remote));
         refreshAll();
       } catch (err: unknown) {
@@ -296,7 +364,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (index === undefined) { return; }
 
       try {
-        await gitService.stashApply(index);
+        await activeGitService.stashApply(index);
         refreshAll();
         MainPanel.currentPanel?.postRefresh();
       } catch (err: unknown) {
@@ -313,13 +381,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('gitGraphPlus.addWorktree', async () => {
       const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const defaultPath = `${repoPath}-worktrees/`.replace(homeDir, '~');
+      const defaultPath = `${activeRepoPath}-worktrees/`.replace(homeDir, '~');
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'addWorktree', defaultPath });
     }),
 
     vscode.commands.registerCommand('gitGraphPlus.pruneWorktrees', async () => {
       try {
-        await gitService.worktreePrune();
+        await activeGitService.worktreePrune();
         worktreesProvider.refresh();
         vscode.window.showInformationMessage(vscode.l10n.t('worktreesPruned'));
       } catch (err: unknown) {
@@ -394,7 +462,7 @@ export function activate(context: vscode.ExtensionContext) {
       const branch = branchItem?.branch;
       if (!branch) { return; }
       const slashIndex = branch.name.indexOf('/');
-      const remotes = await gitService.remotes();
+      const remotes = await activeGitService.remotes();
       const defaultRemote = remotes[0]?.name ?? 'origin';
       const remote = slashIndex > 0 ? branch.name.substring(0, slashIndex) : defaultRemote;
       const branchName = slashIndex > 0 ? branch.name.substring(slashIndex + 1) : branch.name;
@@ -426,7 +494,7 @@ export function activate(context: vscode.ExtensionContext) {
         MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: branch.name, localName });
       } else if (pick.label.includes('Delete')) {
         const slashIndex = branch.name.indexOf('/');
-        const remotes = await gitService.remotes();
+        const remotes = await activeGitService.remotes();
         const defaultRemote = remotes[0]?.name ?? 'origin';
         const remote = slashIndex > 0 ? branch.name.substring(0, slashIndex) : defaultRemote;
         const branchName = slashIndex > 0 ? branch.name.substring(slashIndex + 1) : branch.name;
@@ -470,4 +538,5 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   MainPanel.onSidebarRefresh = null;
+  MainPanel.onRepoChange = null;
 }

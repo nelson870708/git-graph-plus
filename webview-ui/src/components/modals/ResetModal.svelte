@@ -13,7 +13,11 @@
 
   let { hash, branchName, defaultMode = 'mixed', onConfirm, onClose }: Props = $props();
 
-  let resetMode = $state<'soft' | 'mixed' | 'hard'>(defaultMode);
+  let resetMode = $state<'soft' | 'mixed' | 'hard'>('mixed');
+
+  $effect(() => {
+    resetMode = defaultMode;
+  });
 </script>
 
 <Modal title={t('reset.modalTitle')} {onClose}>

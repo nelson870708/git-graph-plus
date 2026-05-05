@@ -13,6 +13,13 @@ export class RemotesViewProvider implements vscode.TreeDataProvider<RemoteTreeIt
 
   constructor(private gitService: GitService) {}
 
+  public setGitService(gitService: GitService): void {
+    this.gitService = gitService;
+    this.rootCache = null;
+    this.branchCache.clear();
+    this.refresh();
+  }
+
   private fetchId = 0;
 
   refresh(): void {

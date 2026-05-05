@@ -10,6 +10,12 @@ export class StashesViewProvider implements vscode.TreeDataProvider<StashItem> {
 
   constructor(private gitService: GitService) {}
 
+  public setGitService(gitService: GitService): void {
+    this.gitService = gitService;
+    this.cache = null;
+    this.refresh();
+  }
+
   private fetchId = 0;
 
   refresh(): void { this.pending = this.doFetch(); }
