@@ -4,6 +4,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import type { Commit } from '../../lib/types';
   import Modal from '../common/Modal.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
 
   interface Props {
     base: string;
@@ -164,10 +165,10 @@
   {:else}
     <div class="modal-context-card">
       <i class="codicon codicon-git-branch"></i>
-      <span class="modal-pill modal-pill--target">{branchName}</span>
+      <span use:tooltip={branchName} class="modal-pill modal-pill--target"><span class="modal-pill-text">{branchName}</span></span>
       <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
       <i class="codicon codicon-git-commit"></i>
-      <span class="modal-pill modal-pill--source">{base.substring(0, 7)}</span>
+      <span use:tooltip={base} class="modal-pill modal-pill--source"><span class="modal-pill-text">{base.substring(0, 7)}</span></span>
     </div>
     <div class="rebase-header">
       <span class="rebase-count">{todos.length} commit{todos.length > 1 ? 's' : ''}</span>
@@ -190,7 +191,7 @@
           ondragend={handleDragEnd}
           role="listitem"
         >
-          <span class="drag-handle" title="Drag to reorder">
+          <span class="drag-handle" use:tooltip={"Drag to reorder"}>
             <i class="codicon codicon-gripper"></i>
           </span>
 
@@ -205,7 +206,7 @@
                 dropdownPos = { x: rect.left, y: rect.bottom + 2 };
                 showActionMenu = index;
               }}
-              title="Click to change action"
+              use:tooltip={"Click to change action"}
             >
               <i class="codicon codicon-{info.icon}"></i>
               {info.label}
@@ -220,11 +221,11 @@
                 class="todo-message-input"
                 type="text"
                 placeholder={todo.action === 'reword' ? t('rebase.inlineDesc.reword') : t('rebase.inlineDesc.squash')}
-                title={todo.subject}
+                use:tooltip={todo.subject}
                 bind:value={todos[index].newMessage}
               />
             {:else}
-              <span class="todo-subject truncate" class:dropped-text={todo.action === 'drop'} title={todo.subject}>{todo.subject}</span>
+              <span class="todo-subject truncate" class:dropped-text={todo.action === 'drop'} use:tooltip={todo.subject}>{todo.subject}</span>
               {#if todo.action !== 'pick'}
                 <span class="action-inline-desc">{t(`rebase.action.${todo.action}`)}</span>
               {/if}
@@ -232,10 +233,10 @@
           </div>
 
           <div class="move-btns">
-            <button class="move-btn" disabled={index === 0} onclick={() => moveUp(index)} title="Move up">
+            <button class="move-btn" disabled={index === 0} onclick={() => moveUp(index)} aria-label="Move up" use:tooltip={"Move up"}>
               <i class="codicon codicon-chevron-up"></i>
             </button>
-            <button class="move-btn" disabled={index === todos.length - 1} onclick={() => moveDown(index)} title="Move down">
+            <button class="move-btn" disabled={index === todos.length - 1} onclick={() => moveDown(index)} aria-label="Move down" use:tooltip={"Move down"}>
               <i class="codicon codicon-chevron-down"></i>
             </button>
           </div>
@@ -255,7 +256,7 @@
             class="action-option"
             class:active={activeAction === act.value}
             {disabled}
-            title={disabled ? 'Cannot squash/fixup the oldest commit' : undefined}
+            use:tooltip={disabled ? 'Cannot squash/fixup the oldest commit' : ''}
             onclick={() => !disabled && setAction(showActionMenu!, act.value)}
           >
             <i class="codicon codicon-{act.icon}" style="color: {disabled ? 'var(--text-secondary)' : act.color}"></i>
@@ -278,7 +279,7 @@
       <button
         class="primary"
         disabled={!hasChanges}
-        title={hasChanges ? undefined : t('rebase.noChanges')}
+        use:tooltip={hasChanges ? '' : t('rebase.noChanges')}
         onclick={execute}
       >{t('rebase.start')}</button>
     </div>
@@ -409,6 +410,7 @@
     padding: 4px;
     min-width: 200px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-size: var(--vscode-font-size, 13px);
   }
 
   .action-option {
