@@ -22,6 +22,7 @@
   let menuEl: HTMLDivElement | undefined = $state();
   let activeSubmenu = $state<number | null>(null);
   let submenuOnLeft = $state(false);
+  let submenuOffsetY = $state(0);
 
   onMount(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -79,6 +80,9 @@
             if (wrapper) {
               const rect = wrapper.getBoundingClientRect();
               submenuOnLeft = rect.right + 190 > window.innerWidth;
+              const submenuHeight = item.children ? item.children.length * 30 + 8 : 0;
+              const overflow = rect.top + submenuHeight - window.innerHeight + 4;
+              submenuOffsetY = overflow > 0 ? -overflow : 0;
             }
           }}
           role="menuitem"
@@ -88,7 +92,7 @@
           <i class="codicon codicon-chevron-right submenu-arrow"></i>
         </button>
         {#if activeSubmenu === idx}
-          <div class="submenu" class:on-left={submenuOnLeft} role="menu" tabindex="-1">
+          <div class="submenu" class:on-left={submenuOnLeft} style="top: calc(-5px + {submenuOffsetY}px);" role="menu" tabindex="-1">
             {#each item.children as child}
               {#if child.separator}
                 <div class="separator"></div>

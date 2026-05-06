@@ -4,13 +4,29 @@ export function tooltip(node: HTMLElement, text: string | undefined) {
   let mouseX = 0;
   let mouseY = 0;
 
+  function position() {
+    if (!el) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const { width, height } = el.getBoundingClientRect();
+
+    const OFFSET_X = 8;
+    const OFFSET_Y = 14;
+
+    let x = mouseX + OFFSET_X;
+    let y = mouseY + OFFSET_Y;
+
+    if (x + width > vw - 4) x = mouseX - width - OFFSET_X;
+    if (y + height > vh - 4) y = mouseY - height - 4;
+
+    el.style.left = `${Math.max(4, x)}px`;
+    el.style.top = `${Math.max(4, y)}px`;
+  }
+
   function onMouseMove(e: MouseEvent) {
     mouseX = e.clientX;
     mouseY = e.clientY;
-    if (el) {
-      el.style.left = `${mouseX + 8}px`;
-      el.style.top = `${mouseY + 14}px`;
-    }
+    position();
   }
 
   function show(e: MouseEvent) {
@@ -22,8 +38,7 @@ export function tooltip(node: HTMLElement, text: string | undefined) {
       el.className = 'vsg-tooltip';
       el.textContent = text;
       document.body.appendChild(el);
-      el.style.left = `${mouseX + 8}px`;
-      el.style.top = `${mouseY + 14}px`;
+      position();
     }, 500);
   }
 
@@ -40,7 +55,7 @@ export function tooltip(node: HTMLElement, text: string | undefined) {
   return {
     update(t: string | undefined) {
       text = t;
-      if (el) el.textContent = t ?? '';
+      if (el) { el.textContent = t ?? ''; position(); }
     },
     destroy() {
       hide();
