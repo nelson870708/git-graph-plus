@@ -3,6 +3,7 @@
   import Modal from '../common/Modal.svelte';
   import ColorSelect from '../common/ColorSelect.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
   import { getVsCodeApi } from '../../lib/vscode-api';
 
   interface Props {
@@ -38,9 +39,9 @@
 <Modal title={t('merge.title')} {onClose}>
   <p class="modal-desc">{t('merge.desc')}</p>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--source" title={shortRef(source)}><i class="codicon {isHash(source) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(source)}</span></span>
+    <span use:tooltip={shortRef(source)} class="modal-pill modal-pill--source"><i class="codicon {isHash(source) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(source)}</span></span>
     <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-    <span class="modal-pill modal-pill--target" title={shortRef(target)}><i class="codicon {isHash(target) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(target)}</span></span>
+    <span use:tooltip={shortRef(target)} class="modal-pill modal-pill--target"><i class="codicon {isHash(target) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(target)}</span></span>
   </div>
   <div class="modal-form-group">
     <span class="modal-field-label">{t('merge.mergeType')}</span>

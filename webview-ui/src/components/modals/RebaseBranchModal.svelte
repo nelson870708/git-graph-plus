@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
   import { getVsCodeApi } from '../../lib/vscode-api';
 
   interface Props {
@@ -37,9 +38,9 @@
 <Modal title={t('rebaseBranch.title')} {onClose}>
   <p class="modal-desc">{t('rebaseBranch.desc')}</p>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--target" title={shortRef(branch)}><i class="codicon {isHash(branch) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(branch)}</span></span>
+    <span use:tooltip={shortRef(branch)} class="modal-pill modal-pill--target"><i class="codicon {isHash(branch) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(branch)}</span></span>
     <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-    <span class="modal-pill modal-pill--source" title={shortRef(onto)}><i class="codicon {isHash(onto) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(onto)}</span></span>
+    <span use:tooltip={shortRef(onto)} class="modal-pill modal-pill--source"><i class="codicon {isHash(onto) ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{shortRef(onto)}</span></span>
   </div>
   <div class="modal-form-group">
     <label class="modal-checkbox">

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
   import { branchStore } from '../../lib/stores/branches.svelte';
 
   interface Props {
@@ -34,9 +35,9 @@
 <Modal title={t('createBranch.title')} {onClose}>
   <p class="modal-desc">{t('createBranch.desc')}</p>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--source" title={isStartPointHash ? startPoint.substring(0, 7) : startPoint}><i class="codicon {isStartPointHash ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{isStartPointHash ? startPoint.substring(0, 7) : startPoint}</span></span>
+    <span use:tooltip={isStartPointHash ? startPoint.substring(0, 7) : startPoint} class="modal-pill modal-pill--source"><i class="codicon {isStartPointHash ? 'codicon-git-commit' : 'codicon-git-branch'}"></i><span class="modal-pill-text">{isStartPointHash ? startPoint.substring(0, 7) : startPoint}</span></span>
     <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-    <span class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{name.trim() || '...'}</span></span>
+    <span use:tooltip={name.trim() || '...'} class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{name.trim() || '...'}</span></span>
   </div>
   {#if editableStartPoint}
     <div class="modal-form-group">

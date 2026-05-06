@@ -2,6 +2,7 @@
   import Modal from '../common/Modal.svelte';
   import ColorSelect from '../common/ColorSelect.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
   import { branchStore } from '../../lib/stores/branches.svelte';
 
   interface Props {
@@ -64,9 +65,9 @@
 <Modal title={t('setUpstream.title')} {onClose}>
   <p class="modal-desc">{t('setUpstream.desc', { branch: branchName })}</p>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--target" title={branchName}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branchName}</span></span>
+    <span use:tooltip={branchName} class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branchName}</span></span>
     <i class="codicon codicon-arrow-both" style="color: var(--text-secondary);"></i>
-    <span class="modal-pill modal-pill--source" title="{selectedRemote}/{activeBranch || branchName}"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{selectedRemote}/{activeBranch || branchName}</span></span>
+    <span use:tooltip={`${selectedRemote}/${activeBranch || branchName}`} class="modal-pill modal-pill--source"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{selectedRemote}/{activeBranch || branchName}</span></span>
   </div>
 
   {#if remoteNames.length > 1}

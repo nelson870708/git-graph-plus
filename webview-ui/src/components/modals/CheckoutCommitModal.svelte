@@ -3,6 +3,7 @@
   import Modal from '../common/Modal.svelte';
   import { getVsCodeApi } from '../../lib/vscode-api';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
 
   type DirtyPayload = { merge?: boolean; stash?: boolean; stashUntracked?: boolean; force?: boolean; clean?: boolean };
 
@@ -55,19 +56,19 @@
 
 <Modal title={t('checkoutCommit.title')} {onClose}>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--target" title={hash}><i class="codicon codicon-git-commit"></i><span class="modal-pill-text">{hash.substring(0, 7)}</span></span>
+    <span use:tooltip={hash} class="modal-pill modal-pill--target"><i class="codicon codicon-git-commit"></i><span class="modal-pill-text">{hash.substring(0, 7)}</span></span>
   </div>
 
   {#if linkedBranches.length > 0}
     <div class="modal-context-card">
       {#each linkedBranches as branch}
-        <span class="modal-pill modal-pill--source" title={branch}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branch}</span></span>
+        <span use:tooltip={branch} class="modal-pill modal-pill--source"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branch}</span></span>
       {/each}
     </div>
   {:else if linkedRemoteBranches.length > 0}
     <div class="modal-context-card">
       {#each linkedRemoteBranches as rb}
-        <span class="modal-pill modal-pill--target" title="{rb.remote}/{rb.name}"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{rb.remote}/{rb.name}</span></span>
+        <span use:tooltip={`${rb.remote}/${rb.name}`} class="modal-pill modal-pill--target"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{rb.remote}/{rb.name}</span></span>
       {/each}
     </div>
   {:else}

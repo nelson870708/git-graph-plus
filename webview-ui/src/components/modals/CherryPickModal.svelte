@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
   import { getVsCodeApi } from '../../lib/vscode-api';
 
   interface Props {
@@ -34,9 +35,9 @@
 <Modal title={t('cherryPick.title')} {onClose}>
   <p class="modal-desc">{t('cherryPick.desc')}</p>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--target"><i class="codicon codicon-git-commit"></i><span class="modal-pill-text">{commit.substring(0, 7)}</span></span>
+    <span use:tooltip={commit} class="modal-pill modal-pill--target"><i class="codicon codicon-git-commit"></i><span class="modal-pill-text">{commit.substring(0, 7)}</span></span>
     <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-    <span class="modal-pill modal-pill--source" title={branch}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branch}</span></span>
+    <span use:tooltip={branch} class="modal-pill modal-pill--source"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branch}</span></span>
   </div>
   <div class="modal-form-group">
     <label class="modal-checkbox">

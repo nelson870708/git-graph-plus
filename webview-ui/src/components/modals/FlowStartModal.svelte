@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
 
   interface Props {
     flowType: string;
@@ -31,9 +32,9 @@
   <p class="modal-desc">{t(descKey, { developBranch: baseBranch, productionBranch: baseBranch })}</p>
 
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--source" title={baseBranch}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{baseBranch}</span></span>
+    <span use:tooltip={baseBranch} class="modal-pill modal-pill--source"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{baseBranch}</span></span>
     <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-    <span class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{prefix}{name || '...'}</span></span>
+    <span use:tooltip={prefix + (name || '...')} class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{prefix}{name || '...'}</span></span>
   </div>
 
   <div class="modal-form-group">

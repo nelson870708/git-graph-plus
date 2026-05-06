@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
   import { t } from '../../lib/i18n/index.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
 
   interface Props {
     remoteName: string;
@@ -29,7 +30,7 @@
 <Modal title={t('checkoutRemote.title')} {onClose}>
   <p class="modal-desc">{t('checkoutRemote.desc', { remote: remoteName })}</p>
   <div class="modal-context-card">
-    <span class="modal-pill modal-pill--target" title={remoteName}><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{remoteName}</span></span>
+    <span use:tooltip={remoteName} class="modal-pill modal-pill--target"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{remoteName}</span></span>
   </div>
   <div class="modal-form-group">
     <label class="modal-field-label" for="checkout-local-name">{t('checkoutRemote.localName')}</label>
