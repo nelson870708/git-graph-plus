@@ -30,7 +30,7 @@
     "gui"
   ],
   "activationEvents": [
-    "workspaceContains:.git"
+    "onStartupFinished"
   ],
   "l10n": "./l10n",
   "main": "./dist/extension.js",

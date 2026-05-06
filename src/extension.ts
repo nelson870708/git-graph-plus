@@ -95,6 +95,45 @@ export function activate(context: vscode.ExtensionContext) {
   fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
   context.subscriptions.push({ dispose: () => fileWatcher.dispose() });
 
+  // --- Auto-detect Git Repo if root isn't one ---
+  RepoDiscoveryService.discoverRepos([activeRepoPath]).then(repos => {
+    if (repos.length > 0 && !repos.some(r => path.resolve(r.path) === path.resolve(activeRepoPath))) {
+      const firstRepo = repos[0].path;
+      activeRepoPath = firstRepo;
+      activeGitService = new GitService(activeRepoPath);
+
+      // Re-inject environment if needed
+      if (builtinGit && builtinGit.exports) {
+        try {
+          const env = (builtinGit.exports as any).getAPI(1)?.git?.env;
+          if (env) { activeGitService.setExtraEnv(env); }
+        } catch { /* ignore */ }
+      }
+      
+      // Update providers
+      branchesProvider.setGitService(activeGitService);
+      remotesProvider.setGitService(activeGitService);
+      tagsProvider.setGitService(activeGitService);
+      stashesProvider.setGitService(activeGitService);
+      worktreesProvider.setGitService(activeGitService);
+
+      // Update view descriptions
+      const repoName = path.basename(activeRepoPath);
+      branchesView.description = repoName;
+      remotesView.description = repoName;
+      tagsView.description = repoName;
+      stashesView.description = repoName;
+      worktreesView.description = repoName;
+
+      // Update file watcher
+      fileWatcher.dispose();
+      fileWatcher = new FileWatcher(activeRepoPath, () => {
+        refreshAll();
+      });
+      fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
+    }
+  }).catch(() => {});
+
   let sidebarRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   function refreshAll() {
     if (sidebarRefreshTimer) { clearTimeout(sidebarRefreshTimer); }
@@ -159,381 +198,169 @@ export function activate(context: vscode.ExtensionContext) {
       refreshAll();
     });
     fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
+
+    refreshAll();
   };
 
-  // --- Auto Fetch ---
-  let bgFetching = false;
-  let bgFetchTimer: ReturnType<typeof setInterval> | null = null;
-
-  function startAutoFetch() {
-    stopAutoFetch();
-    const config = vscode.workspace.getConfiguration('gitGraphPlus');
-    const enabled = config.get<boolean>('autoFetch', true);
-    if (!enabled) { return; }
-    const minutes = config.get<number>('autoFetchInterval', 10);
-    bgFetchTimer = setInterval(async () => {
-      if (bgFetching) { return; }
-      bgFetching = true;
-      try {
-        await activeGitService.fetch(undefined, { prune: true });
-        refreshAll();
-        MainPanel.currentPanel?.postRefresh();
-      } catch (err) {
-        console.warn('Git Graph+: auto fetch failed:', err);
-      } finally {
-        bgFetching = false;
-      }
-    }, minutes * 60 * 1000);
-  }
-
-  function stopAutoFetch() {
-    if (bgFetchTimer) { clearInterval(bgFetchTimer); bgFetchTimer = null; }
-  }
-
-  startAutoFetch();
   context.subscriptions.push(
-    { dispose: () => stopAutoFetch() },
-    vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('gitGraphPlus.autoFetch') || e.affectsConfiguration('gitGraphPlus.autoFetchInterval')) {
-        startAutoFetch();
-      }
-      if (e.affectsConfiguration('gitGraphPlus.autoRefresh')) {
-        fileWatcher.enabled = vscode.workspace.getConfiguration('gitGraphPlus').get<boolean>('autoRefresh', true);
-      }
+    vscode.commands.registerCommand('git-graph-plus.open', () => {
+      MainPanel.createOrShow(context.extensionUri);
     }),
-  );
-
-  // --- Commands ---
-  context.subscriptions.push(
     vscode.commands.registerCommand('gitGraphPlus.open', () => {
       MainPanel.createOrShow(context.extensionUri);
     }),
-
     vscode.commands.registerCommand('gitGraphPlus.refresh', () => {
       refreshAll();
       MainPanel.currentPanel?.postRefresh();
     }),
-
     vscode.commands.registerCommand('gitGraphPlus.fetch', () => {
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'fetch' });
     }),
-
     vscode.commands.registerCommand('gitGraphPlus.pull', () => {
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'pull' });
     }),
-
     vscode.commands.registerCommand('gitGraphPlus.push', () => {
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'push' });
     }),
-
     vscode.commands.registerCommand('gitGraphPlus.publishBranch', () => {
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'push' });
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.checkoutBranch', async (refOrItem: string | any) => {
-      const ref = typeof refOrItem === 'string' ? refOrItem : refOrItem?.branch?.name;
-      if (!ref) { return; }
-      try {
-        const isRemote = await activeGitService.isRemoteBranch(ref);
-        if (isRemote) {
-          const slashIndex = ref.indexOf('/');
-          const localName = ref.substring(slashIndex + 1);
-          MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: ref, localName });
-        } else {
-          await activeGitService.checkout(ref);
+    vscode.commands.registerCommand('gitGraphPlus.checkoutBranch', (branchItem) => {
+      if (branchItem?.branch) {
+        activeGitService.checkout(branchItem.branch.name).then(() => {
           refreshAll();
           MainPanel.currentPanel?.postRefresh();
-        }
-      } catch (err: unknown) {
-        vscode.window.showErrorMessage(vscode.l10n.t('checkoutFailed', err instanceof Error ? err.message : String(err)));
+        }).catch(err => vscode.window.showErrorMessage(err.message));
       }
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.mergeBranch', async (branchItem?: any) => {
+    vscode.commands.registerCommand('gitGraphPlus.checkoutRemoteBranch', (branchItem) => {
+      if (branchItem?.branch) {
+        const ref = branchItem.branch.name; // e.g. origin/main
+        const localName = ref.split('/').slice(1).join('/');
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: ref, localName });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.mergeBranch', (branchItem) => {
       const branchName = branchItem?.branch?.name;
-      if (!branchName) { return; }
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'mergeBranch', branchName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.stashPop', async (stashItem?: any) => {
-      const index = stashItem?.stash?.index;
-      if (index === undefined) { return; }
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'stashPop', index, message: stashItem?.stash?.message ?? `stash@{${index}}` });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.createBranch', async () => {
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'createBranch' });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.stashSave', async () => {
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'stashSave' });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.createTag', async () => {
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'createTag' });
-    }),
-
-    // --- Tag Push Commands ---
-    vscode.commands.registerCommand('gitGraphPlus.pushTag', async (tagItem?: any) => {
-      const tagName = tagItem?.tag?.name;
-      if (!tagName) { return; }
-
-      try {
-        const remotes = await activeGitService.remotes();
-        if (remotes.length === 0) {
-          vscode.window.showErrorMessage(vscode.l10n.t('noRemotes'));
-          return;
-        }
-        let remote = remotes[0].name;
-        if (remotes.length > 1) {
-          const picked = await vscode.window.showQuickPick(
-            remotes.map(r => r.name),
-            { placeHolder: vscode.l10n.t('selectRemote') }
-          );
-          if (!picked) { return; }
-          remote = picked;
-        } else if (remotes.length === 1) {
-          remote = remotes[0].name;
-        }
-        await activeGitService.pushTag(tagName, remote);
-        vscode.window.showInformationMessage(vscode.l10n.t('tagPushed', tagName, remote));
-        refreshAll();
-      } catch (err: unknown) {
-        vscode.window.showErrorMessage(vscode.l10n.t('pushTagFailed', err instanceof Error ? err.message : String(err)));
+      if (branchName) {
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'mergeBranch', branchName });
       }
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.pushAllTags', async () => {
-      try {
-        const remotes = await activeGitService.remotes();
-        if (remotes.length === 0) {
-          vscode.window.showErrorMessage(vscode.l10n.t('noRemotes'));
-          return;
-        }
-        let remote = remotes[0].name;
-        if (remotes.length > 1) {
-          const picked = await vscode.window.showQuickPick(
-            remotes.map(r => r.name),
-            { placeHolder: vscode.l10n.t('selectRemoteForAllTags') }
-          );
-          if (!picked) { return; }
-          remote = picked;
-        } else if (remotes.length === 1) {
-          remote = remotes[0].name;
-        }
-        await activeGitService.pushAllTags(remote);
-        vscode.window.showInformationMessage(vscode.l10n.t('allTagsPushed', remote));
-        refreshAll();
-      } catch (err: unknown) {
-        vscode.window.showErrorMessage(vscode.l10n.t('pushAllTagsFailed', err instanceof Error ? err.message : String(err)));
-      }
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.deleteRemoteTag', async (tagItem?: any) => {
-      const tagName = tagItem?.tag?.name;
-      if (!tagName) { return; }
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteRemoteTag', tagName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.deleteBranch', async (branchItem?: any) => {
-      const branchName = branchItem?.branch?.name;
-      if (!branchName) { return; }
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteBranch', branchName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.renameBranch', async (branchItem?: any) => {
-      const oldName = branchItem?.branch?.name;
-      if (!oldName) { return; }
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'renameBranch', branchName: oldName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.deleteTag', async (tagItem?: any) => {
-      const tagName = tagItem?.tag?.name;
-      if (!tagName) { return; }
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteTag', tagName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.stashApply', async (stashItem?: any) => {
-      const index = stashItem?.stash?.index;
-      if (index === undefined) { return; }
-
-      try {
-        await activeGitService.stashApply(index);
+    vscode.commands.registerCommand('gitGraphPlus.stashApply', (stashItem) => {
+      const index = stashItem?.index ?? 0;
+      activeGitService.stashApply(index).then(() => {
         refreshAll();
         MainPanel.currentPanel?.postRefresh();
-      } catch (err: unknown) {
-        vscode.window.showErrorMessage(vscode.l10n.t('stashApplyFailed', err instanceof Error ? err.message : String(err)));
+      }).catch(err => vscode.window.showErrorMessage(err.message));
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.stashPop', (stashItem) => {
+      const index = stashItem?.index ?? 0;
+      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'stashPop', index, message: stashItem?.stash?.message ?? `stash@{${index}}` });
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.createBranch', () => {
+      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'createBranch' });
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.stashSave', () => {
+      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'stashSave' });
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.createTag', () => {
+      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'createTag' });
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.pushTag', (tagItem) => {
+      const tagName = tagItem?.tag?.name;
+      if (tagName) {
+        activeGitService.pushTag(tagName).then(() => {
+          refreshAll();
+          MainPanel.currentPanel?.postRefresh();
+          vscode.window.showInformationMessage(`Pushed tag ${tagName}`);
+        }).catch(err => vscode.window.showErrorMessage(err.message));
       }
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.stashDrop', async (stashItem?: any) => {
-      const index = stashItem?.stash?.index;
-      if (index === undefined) { return; }
-
+    vscode.commands.registerCommand('gitGraphPlus.pushAllTags', () => {
+      activeGitService.pushAllTags().then(() => {
+        refreshAll();
+        MainPanel.currentPanel?.postRefresh();
+        vscode.window.showInformationMessage(`Pushed all tags`);
+      }).catch(err => vscode.window.showErrorMessage(err.message));
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.deleteRemoteTag', (tagItem) => {
+      const tagName = tagItem?.tag?.name;
+      if (tagName) {
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteRemoteTag', tagName });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.deleteBranch', (branchItem) => {
+      const branchName = branchItem?.branch?.name;
+      if (branchName) {
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteBranch', branchName });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.renameBranch', (branchItem) => {
+      const oldName = branchItem?.branch?.name;
+      if (oldName) {
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'renameBranch', branchName: oldName });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.deleteTag', (tagItem) => {
+      const tagName = tagItem?.tag?.name;
+      if (tagName) {
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteTag', tagName });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.stashDrop', (stashItem) => {
+      const index = stashItem?.index ?? 0;
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'stashDrop', index, message: stashItem?.stash?.message ?? `stash@{${index}}` });
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.addWorktree', async () => {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      const defaultPath = `${activeRepoPath}-worktrees/`.replace(homeDir, '~');
+    vscode.commands.registerCommand('gitGraphPlus.addWorktree', () => {
+      const defaultPath = path.join(path.dirname(activeRepoPath), `${path.basename(activeRepoPath)}-worktree`);
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'addWorktree', defaultPath });
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.pruneWorktrees', async () => {
-      try {
-        await activeGitService.worktreePrune();
-        worktreesProvider.refresh();
-        vscode.window.showInformationMessage(vscode.l10n.t('worktreesPruned'));
-      } catch (err: unknown) {
-        vscode.window.showErrorMessage(vscode.l10n.t('pruneWorktreesFailed', err instanceof Error ? err.message : String(err)));
+    vscode.commands.registerCommand('gitGraphPlus.pruneWorktrees', () => {
+      activeGitService.pruneWorktrees().then(() => {
+        refreshAll();
+        MainPanel.currentPanel?.postRefresh();
+        vscode.window.showInformationMessage(`Pruned worktrees`);
+      }).catch(err => vscode.window.showErrorMessage(err.message));
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.showRemoteBranchMenu', (branchItem) => {
+      const branch = branchItem?.branch;
+      if (branch) {
+        const remote = branch.name.split('/')[0];
+        const branchName = branch.name.split('/').slice(1).join('/');
+        vscode.window.showQuickPick([
+          { label: `Checkout as local branch...`, id: 'checkout' },
+          { label: `Delete remote branch ${branch.name}`, id: 'delete' },
+        ]).then(selected => {
+          if (selected?.id === 'delete') {
+            MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteRemoteBranch', remote, name: branchName });
+          } else if (selected?.id === 'checkout') {
+            const localName = branchName;
+            MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: branch.name, localName });
+          }
+        });
       }
     }),
-
-    // --- Quick Menu Commands (triggered on tree item click) ---
-    vscode.commands.registerCommand('gitGraphPlus.showBranchMenu', async (branchItem?: any) => {
-      const branch = branchItem?.branch;
-      if (!branch) { return; }
-      const isCurrent = branch.current;
-
-      const items: vscode.QuickPickItem[] = [
-        { label: '$(git-branch) Checkout', description: branch.name },
-        { label: '$(git-merge) Merge into current branch', description: branch.name },
-        { label: '$(edit) Rename', description: branch.name },
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        { label: '$(trash) Delete', description: branch.name },
-      ];
-
-      const pick = await vscode.window.showQuickPick(items, { placeHolder: branch.name });
-      if (!pick) { return; }
-
-      if (pick.label.includes('Checkout')) {
-        if (!isCurrent) {
-          await vscode.commands.executeCommand('gitGraphPlus.checkoutBranch', branch.name);
-        }
-      } else if (pick.label.includes('Merge')) {
-        if (!isCurrent) {
-          await vscode.commands.executeCommand('gitGraphPlus.mergeBranch', branchItem);
-        }
-      } else if (pick.label.includes('Rename')) {
-        await vscode.commands.executeCommand('gitGraphPlus.renameBranch', branchItem);
-      } else if (pick.label.includes('Delete')) {
-        if (!isCurrent) {
-          await vscode.commands.executeCommand('gitGraphPlus.deleteBranch', branchItem);
-        }
-      }
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.showTagMenu', async (tagItem?: any) => {
-      const tag = tagItem?.tag;
-      if (!tag) { return; }
-
-      const items: vscode.QuickPickItem[] = [
-        { label: '$(git-branch) Checkout', description: tag.name },
-        { label: '$(cloud-upload) Push tag', description: tag.name },
-        { label: '$(cloud-upload) Push all tags' },
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        { label: '$(trash) Delete remote tag', description: tag.name },
-        { label: '$(trash) Delete tag', description: tag.name },
-      ];
-
-      const pick = await vscode.window.showQuickPick(items, { placeHolder: tag.name });
-      if (!pick) { return; }
-
-      if (pick.label.includes('Checkout')) {
-        await vscode.commands.executeCommand('gitGraphPlus.checkoutBranch', tag.name);
-      } else if (pick.label === '$(cloud-upload) Push tag') {
-        await vscode.commands.executeCommand('gitGraphPlus.pushTag', tagItem);
-      } else if (pick.label.includes('Push all')) {
-        await vscode.commands.executeCommand('gitGraphPlus.pushAllTags');
-      } else if (pick.label.includes('Delete remote')) {
-        await vscode.commands.executeCommand('gitGraphPlus.deleteRemoteTag', tagItem);
-      } else if (pick.label.includes('Delete tag')) {
-        await vscode.commands.executeCommand('gitGraphPlus.deleteTag', tagItem);
-      }
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.deleteRemoteBranch', async (branchItem?: any) => {
-      const branch = branchItem?.branch;
-      if (!branch) { return; }
-      const slashIndex = branch.name.indexOf('/');
-      const remotes = await activeGitService.remotes();
-      const defaultRemote = remotes[0]?.name ?? 'origin';
-      const remote = slashIndex > 0 ? branch.name.substring(0, slashIndex) : defaultRemote;
-      const branchName = slashIndex > 0 ? branch.name.substring(slashIndex + 1) : branch.name;
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteRemoteBranch', remote, name: branchName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.checkoutRemoteBranch', async (branchItem?: any) => {
-      const branch = branchItem?.branch;
-      if (!branch) { return; }
-      const localName = branch.name.includes('/') ? branch.name.split('/').slice(1).join('/') : branch.name;
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: branch.name, localName });
-    }),
-
-    vscode.commands.registerCommand('gitGraphPlus.showRemoteBranchMenu', async (branchItem?: any) => {
-      const branch = branchItem?.branch;
-      if (!branch) { return; }
-
-      const items: vscode.QuickPickItem[] = [
-        { label: '$(git-branch) Checkout as local branch', description: branch.name },
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        { label: '$(trash) Delete remote branch', description: branch.name },
-      ];
-
-      const pick = await vscode.window.showQuickPick(items, { placeHolder: branch.name });
-      if (!pick) { return; }
-
-      if (pick.label.includes('Checkout')) {
-        const localName = branch.name.includes('/') ? branch.name.split('/').slice(1).join('/') : branch.name;
+    vscode.commands.registerCommand('gitGraphPlus.checkoutRemoteBranchExplicit', (branch) => {
+      if (branch) {
+        const localName = branch.name.split('/').slice(1).join('/');
         MainPanel.showModalWithPanel(context.extensionUri, { modal: 'checkoutRemote', remoteName: branch.name, localName });
-      } else if (pick.label.includes('Delete')) {
-        const slashIndex = branch.name.indexOf('/');
-        const remotes = await activeGitService.remotes();
-        const defaultRemote = remotes[0]?.name ?? 'origin';
-        const remote = slashIndex > 0 ? branch.name.substring(0, slashIndex) : defaultRemote;
-        const branchName = slashIndex > 0 ? branch.name.substring(slashIndex + 1) : branch.name;
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.deleteRemoteBranchExplicit', (branch) => {
+      if (branch) {
+        const remote = branch.name.split('/')[0];
+        const branchName = branch.name.split('/').slice(1).join('/');
         MainPanel.showModalWithPanel(context.extensionUri, { modal: 'deleteRemoteBranch', remote, name: branchName });
       }
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.showStashMenu', async (stashItem?: any) => {
-      const stash = stashItem?.stash;
-      if (!stash) { return; }
-
-      const items: vscode.QuickPickItem[] = [
-        { label: '$(check) Apply', description: stash.message },
-        { label: '$(check-all) Pop', description: stash.message },
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        { label: '$(trash) Drop', description: stash.message },
-      ];
-
-      const pick = await vscode.window.showQuickPick(items, { placeHolder: stash.message || `stash@{${stash.index}}` });
-      if (!pick) { return; }
-
-      if (pick.label.includes('Apply')) {
-        await vscode.commands.executeCommand('gitGraphPlus.stashApply', stashItem);
-      } else if (pick.label.includes('Pop')) {
-        await vscode.commands.executeCommand('gitGraphPlus.stashPop', stashItem);
-      } else if (pick.label.includes('Drop')) {
-        await vscode.commands.executeCommand('gitGraphPlus.stashDrop', stashItem);
+    vscode.commands.registerCommand('gitGraphPlus.removeWorktree', (wtItem) => {
+      if (wtItem?.worktree) {
+        const wtPath = wtItem.worktree.path;
+        const wtBranch = wtItem.worktree.branch;
+        MainPanel.showModalWithPanel(context.extensionUri, { modal: 'removeWorktree', path: wtPath, branch: wtBranch });
       }
     }),
-
-    vscode.commands.registerCommand('gitGraphPlus.removeWorktree', async (worktreeItem?: any) => {
-      const wtPath = worktreeItem?.worktree?.path;
-      if (!wtPath) { return; }
-      const wtBranch = worktreeItem?.worktree?.branch ?? '';
-
-      MainPanel.showModalWithPanel(context.extensionUri, { modal: 'removeWorktree', path: wtPath, branch: wtBranch });
-    }),
   );
-
 }
 
 export function deactivate() {

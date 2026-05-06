@@ -52,8 +52,15 @@ export class RepoDiscoveryService {
       }
     }
 
-    // Discover submodules recursively from each repo found
-    for (const repo of [...repos]) {
+    // Discover independent nested git repos in workspace folders
+    // We do this before submodules to ensure we catch all independent repos first
+    for (const folderPath of folderPaths) {
+      await this.discoverNestedRepos(folderPath, seen, repos, 0, normalize);
+    }
+
+    // Discover submodules recursively from each repo found (both root and nested)
+    const reposToScan = [...repos];
+    for (const repo of reposToScan) {
       try {
         const subs = await this.getSubmodules(repo.path);
         for (const sub of subs) {
@@ -66,11 +73,6 @@ export class RepoDiscoveryService {
       } catch {
         // No submodules or error, skip
       }
-    }
-
-    // Discover independent nested git repos in workspace folders
-    for (const folderPath of folderPaths) {
-      await this.discoverNestedRepos(folderPath, seen, repos, 0, normalize);
     }
 
 

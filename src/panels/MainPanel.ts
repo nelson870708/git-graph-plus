@@ -1146,9 +1146,31 @@ export class MainPanel {
       workspacePaths.add(this.repoPath);
       const repos = await RepoDiscoveryService.discoverRepos([...workspacePaths]);
       this.cachedRepos = repos;
+
+      let active = this.repoPath;
+      if (repos.length > 0 && !repos.some(r => r.path === active)) {
+        // Current path is not a repo, switch to the first discovered one
+        active = repos[0].path;
+        this.repoPath = active;
+        this.gitService = new GitService(active);
+        if (MainPanel.extraEnv) {
+          this.gitService.setExtraEnv(MainPanel.extraEnv);
+        }
+        this.fileWatcher.dispose();
+        this.fileWatcher = new FileWatcher(active, (what) => this.onRepoChanged(what));
+        
+        // Notify extension to update sidebar views
+        if (MainPanel.onRepoChange) {
+          MainPanel.onRepoChange(active);
+        }
+        
+        // Full refresh of the graph
+        this.refreshAll();
+      }
+
       this.panel.webview.postMessage({
         type: 'repoList',
-        payload: { repos, active: this.repoPath },
+        payload: { repos, active },
       });
     } catch {
       // ignore
