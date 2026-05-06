@@ -27,6 +27,7 @@
   import FlowFinishModal from './components/modals/FlowFinishModal.svelte';
   import BisectBanner from './components/common/BisectBanner.svelte';
   import type { FlowConfig } from './lib/types';
+  import { tooltip } from './lib/actions/tooltip';
 
   const vscode = getVsCodeApi();
 
@@ -303,11 +304,11 @@
                 {/if}
               </span>
               {#if !file.resolved}
-                <span class="conflict-stage-hint" onclick={(e) => { e.stopPropagation(); vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} role="button" tabindex={0} onkeydown={(e) => { if (e.key === 'Enter') vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} title="Mark as resolved (git add)">
+                <span class="conflict-stage-hint" onclick={(e) => { e.stopPropagation(); vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} role="button" tabindex={0} onkeydown={(e) => { if (e.key === 'Enter') vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} use:tooltip={"Mark as resolved (git add)"}>
                   <i class="codicon codicon-check"></i>
                 </span>
               {/if}
-              <i class="codicon codicon-go-to-file conflict-open-icon" title="Open file"></i>
+              <i class="codicon codicon-go-to-file conflict-open-icon" use:tooltip={"Open file"}></i>
             </button>
           </div>
         {/each}
@@ -432,9 +433,9 @@
   <Modal title={modalStore.stashApply.drop ? t('stashPop.title') : t('stashApply.title')} onClose={() => { modalStore.closeStashApply(); }}>
     <p class="modal-desc">{@html modalStore.stashApply.drop ? t('stashPop.desc') : t('stashApply.desc')}</p>
     <div class="modal-context-card">
-      <span class="modal-pill modal-pill--stash" title={modalStore.stashApply.message || `stash@{${modalStore.stashApply.index}}`}><i class="codicon codicon-archive"></i><span class="modal-pill-text">{modalStore.stashApply.message || `stash@{${modalStore.stashApply.index}}`}</span></span>
+      <span use:tooltip={modalStore.stashApply.message || `stash@{${modalStore.stashApply.index}}`} class="modal-pill modal-pill--stash"><i class="codicon codicon-archive"></i><span class="modal-pill-text">{modalStore.stashApply.message || `stash@{${modalStore.stashApply.index}}`}</span></span>
       <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-      <span class="modal-pill modal-pill--target" title={branchStore.currentBranch?.name ?? 'current branch'}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branchStore.currentBranch?.name ?? 'current branch'}</span></span>
+      <span use:tooltip={branchStore.currentBranch?.name ?? 'current branch'} class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branchStore.currentBranch?.name ?? 'current branch'}</span></span>
     </div>
     <div class="form-actions">
       <button onclick={() => { modalStore.closeStashApply(); }}>{t('common.cancel')}</button>
@@ -446,7 +447,7 @@
 {#if modalStore.renameBranch.show}
   <Modal title={t('renameBranch.title')} onClose={() => { modalStore.closeRenameBranch(); }}>
     <div class="modal-context-card">
-      <span class="modal-pill modal-pill--source" title={modalStore.renameBranch.oldName}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{modalStore.renameBranch.oldName}</span></span>
+      <span use:tooltip={modalStore.renameBranch.oldName} class="modal-pill modal-pill--source"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{modalStore.renameBranch.oldName}</span></span>
     </div>
     <div class="modal-form-group">
       <label class="modal-field-label" for="rename-branch-input">{t('renameBranch.newName')}</label>
@@ -464,7 +465,7 @@
 {#if modalStore.stashRename.show}
   <Modal title={t('stashRename.title')} onClose={() => { modalStore.closeStashRename(); }}>
     <div class="modal-context-card">
-      <span class="modal-pill modal-pill--stash"><i class="codicon codicon-archive"></i><span class="modal-pill-text">{'stash@{' + modalStore.stashRename.index + '}'}</span></span>
+      <span use:tooltip={'stash@{' + modalStore.stashRename.index + '}'} class="modal-pill modal-pill--stash"><i class="codicon codicon-archive"></i><span class="modal-pill-text">{'stash@{' + modalStore.stashRename.index + '}'}</span></span>
     </div>
     <div class="modal-form-group">
       <label class="modal-field-label" for="stash-rename-input">{t('stashRename.newMessage')}</label>
@@ -570,7 +571,7 @@
   <Modal title={t('pushTag.title')} onClose={() => { modalStore.closePushTag(); }}>
     <p class="modal-desc">{t('pushTag.desc')}</p>
     <div class="modal-context-card">
-      <span class="modal-pill modal-pill--tag" title={modalStore.pushTag.tagName}><i class="codicon codicon-tag"></i><span class="modal-pill-text">{modalStore.pushTag.tagName}</span></span>
+      <span use:tooltip={modalStore.pushTag.tagName} class="modal-pill modal-pill--tag"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{modalStore.pushTag.tagName}</span></span>
       <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
       {#if branchStore.remotes.length > 1}
         <i class="codicon codicon-cloud" style="color: var(--text-secondary);"></i>
@@ -581,7 +582,7 @@
           showDot={false}
         />
       {:else}
-        <span class="modal-pill modal-pill--target" title={modalStore.pushTag.remote}><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{modalStore.pushTag.remote}</span></span>
+        <span use:tooltip={modalStore.pushTag.remote} class="modal-pill modal-pill--target"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{modalStore.pushTag.remote}</span></span>
       {/if}
     </div>
     <div class="form-actions">
@@ -599,7 +600,7 @@
     <div class="tag-details">
       <div class="tag-details-row">
         <span class="tag-details-label">{t('graph.tagLabel')}:</span>
-        <span class="tag-details-value"><span class="modal-pill modal-pill--tag"><i class="codicon codicon-tag"></i><span class="modal-pill-text"> {tagDetailsModal.name}</span></span></span>
+        <span class="tag-details-value"><span use:tooltip={tagDetailsModal.name} class="modal-pill modal-pill--tag"><i class="codicon codicon-tag"></i><span class="modal-pill-text"> {tagDetailsModal.name}</span></span></span>
       </div>
       {#if tagDetailsModal.message}
         <div class="tag-details-row tag-details-message-row">
@@ -722,9 +723,9 @@
   <Modal title={t('pull.title')} onClose={() => { modalStore.closePull(); }}>
     <p class="modal-desc">{t('pull.desc')}</p>
     <div class="modal-context-card">
-      <span class="modal-pill modal-pill--source" title={branchStore.currentBranch?.upstream ?? 'origin'}><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{branchStore.currentBranch?.upstream ?? 'origin'}</span></span>
+      <span use:tooltip={branchStore.currentBranch?.upstream ?? 'origin'} class="modal-pill modal-pill--source"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{branchStore.currentBranch?.upstream ?? 'origin'}</span></span>
       <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
-      <span class="modal-pill modal-pill--target" title={branchStore.currentBranch?.name ?? 'current branch'}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branchStore.currentBranch?.name ?? 'current branch'}</span></span>
+      <span use:tooltip={branchStore.currentBranch?.name ?? 'current branch'} class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{branchStore.currentBranch?.name ?? 'current branch'}</span></span>
     </div>
     <div class="modal-form-group">
       <label class="modal-checkbox">
@@ -759,10 +760,10 @@
   <Modal title={t('push.title')} onClose={() => { modalStore.closePush(); }}>
     <p class="modal-desc">{t('push.desc')}</p>
     <div class="modal-context-card">
-      <span class="modal-pill modal-pill--source" title={pushBranchName}><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{pushBranchName}</span></span>
+      <span use:tooltip={pushBranchName} class="modal-pill modal-pill--source"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{pushBranchName}</span></span>
       <i class="codicon codicon-arrow-right" style="color: var(--text-secondary);"></i>
       {#if hasUpstream}
-        <span class="modal-pill modal-pill--target" title={pushTarget}><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{pushTarget}</span></span>
+        <span use:tooltip={pushTarget} class="modal-pill modal-pill--target"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{pushTarget}</span></span>
       {:else if branchStore.remotes.length > 1}
         <i class="codicon codicon-cloud" style="color: var(--text-secondary);"></i>
         <ColorSelect
@@ -772,7 +773,7 @@
           showDot={false}
         />
       {:else}
-        <span class="modal-pill modal-pill--target" title={t('push.new', { target: pushTarget })}><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{t('push.new', { target: pushTarget })}</span></span>
+        <span use:tooltip={t('push.new', { target: pushTarget })} class="modal-pill modal-pill--target"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{t('push.new', { target: pushTarget })}</span></span>
       {/if}
     </div>
     {#if !hasUpstream}
@@ -1261,5 +1262,20 @@
   .bottom-area.fullscreen {
     flex: 1;
     border-top: none;
+  }
+
+  :global(.vsg-tooltip) {
+    position: fixed;
+    z-index: 9999;
+    background: var(--vscode-editorHoverWidget-background, #252526);
+    color: var(--vscode-editorHoverWidget-foreground, #cccccc);
+    border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+    border-radius: 3px;
+    padding: 3px 8px;
+    font-size: calc(var(--vscode-font-size, 13px) - 2px);
+    line-height: 1.5;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 </style>
