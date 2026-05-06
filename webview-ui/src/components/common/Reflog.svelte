@@ -6,6 +6,7 @@
   import ResetModal from '../modals/ResetModal.svelte';
   import CheckoutCommitModal from '../modals/CheckoutCommitModal.svelte';
   import { branchStore } from '../../lib/stores/branches.svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
 
   const vscode = getVsCodeApi();
 
@@ -248,7 +249,7 @@
         {/if}
       </span>
       {#if query}
-        <button class="nav-btn close-btn" onclick={clearSearch} title={t('search.clear')}>
+        <button class="nav-btn close-btn" onclick={clearSearch} aria-label={t('search.clear')} use:tooltip={t('search.clear')}>
           <i class="codicon codicon-close"></i>
         </button>
       {/if}
@@ -261,7 +262,7 @@
       class="filter-btn"
       class:active={refActive}
       onclick={() => { refOpen = !refOpen; actionOpen = false; }}
-      title={t('reflog.filterRef')}
+      use:tooltip={t('reflog.filterRef')}
     >
       <i class="codicon codicon-git-branch filter-btn-icon"></i>
       <span class="filter-label">{selectedRef}</span>
@@ -293,7 +294,7 @@
       class="filter-btn"
       class:active={actionActive}
       onclick={() => { actionOpen = !actionOpen; refOpen = false; }}
-      title={t('reflog.filterAction')}
+      use:tooltip={t('reflog.filterAction')}
     >
       <i class="codicon codicon-list-filter filter-btn-icon"></i>
       <span class="filter-label">
@@ -330,7 +331,8 @@
     class="toggle-btn"
     class:active={danglingOnly}
     onclick={() => { danglingOnly = !danglingOnly; }}
-    title={t('reflog.filterDanglingOnly')}
+    aria-label={t('reflog.filterDanglingOnly')}
+    use:tooltip={t('reflog.filterDanglingOnly')}
   >
     <i class="codicon codicon-warning"></i>
   </button>
@@ -365,7 +367,6 @@
           class:dangling={entry.dangling}
           oncontextmenu={(e) => openContextMenu(e, entry)}
           role="listitem"
-          title={entry.dangling ? t('reflog.danglingTooltip') : undefined}
         >
           <div class="col-idx">{idxLabel}</div>
           <div class="col-action">
@@ -383,12 +384,12 @@
           </div>
           <div class="col-description">
             {#if entry.dangling}
-              <i class="codicon codicon-warning dangling-icon"></i>
+              <i class="codicon codicon-warning dangling-icon" use:tooltip={t('reflog.danglingTooltip')}></i>
             {/if}
-            <span class="reflog-msg truncate" title={entry.message}>{displayMsg}</span>
+            <span class="reflog-msg truncate" use:tooltip={entry.message}>{displayMsg}</span>
           </div>
-          <div class="col-hash" title={entry.hash}>{entry.shortHash}</div>
-          <div class="col-date" title={new Date(entry.date).toLocaleString()}>{relativeTime(entry.date)}</div>
+          <div class="col-hash" use:tooltip={entry.hash}>{entry.shortHash}</div>
+          <div class="col-date" use:tooltip={new Date(entry.date).toLocaleString()}>{relativeTime(entry.date)}</div>
         </div>
       {/each}
 
@@ -817,8 +818,10 @@
   .dangling-icon {
     color: var(--vscode-editorWarning-foreground, #ff9800);
     font-size: 1em;
+    line-height: 1;
     flex-shrink: 0;
     margin-right: 4px;
+    transform: translateY(1px);
   }
 
   /* ── 컬럼 ───────────────────────────────────────────── */
@@ -887,7 +890,7 @@
   .action-type {
     color: var(--vscode-foreground);
     font-size: inherit;
-    font-weight: 500;
+    font-weight: 400;
     text-transform: capitalize;
     flex-shrink: 0;
   }
