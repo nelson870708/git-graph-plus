@@ -316,11 +316,11 @@ export function activate(context: vscode.ExtensionContext) {
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'addWorktree', defaultPath });
     }),
     vscode.commands.registerCommand('gitGraphPlus.pruneWorktrees', () => {
-      activeGitService.pruneWorktrees().then(() => {
+      activeGitService.worktreePrune().then(() => {
         refreshAll();
         MainPanel.currentPanel?.postRefresh();
         vscode.window.showInformationMessage(`Pruned worktrees`);
-      }).catch(err => vscode.window.showErrorMessage(err.message));
+      }).catch((err: Error) => vscode.window.showErrorMessage(err.message));
     }),
     vscode.commands.registerCommand('gitGraphPlus.showRemoteBranchMenu', (branchItem) => {
       const branch = branchItem?.branch;
