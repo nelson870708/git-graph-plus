@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.4 (2026-05-06)
+
+### Improvements
+- **Tooltip System** — Replaced unreliable native `title=` tooltips with a custom JS-based tooltip action across all UI elements (toolbar, graph, modals, reflog, search, and more)
+- **Tooltip UX** — Tooltips now follow the mouse cursor, appear after a short delay, and automatically flip position when near viewport edges to avoid clipping
+- **Modal Pill Truncation** — Branch name pills in modal dialogs now truncate with ellipsis when names are too long, with equal max-width distribution between source and target
+- **Context Menu** — Submenus now adjust vertical position automatically when they would overflow the bottom of the viewport
+
+### Bug Fixes
+- **Multi-repo in Non-Git Root** — Fixed extension not activating correctly when the workspace root is not a Git repository; now auto-discovers and switches to the first valid Git repo on startup (closes #9)
+- **Reflog Dangling Icon** — Fixed vertical alignment of the warning icon in Reflog dangling commit rows
+- **Reflog Tooltip Overlap** — Dangling tooltip moved from the entire row to the warning icon to prevent double tooltip when hovering the message column
+- **Interactive Rebase Pills** — Fixed missing ellipsis truncation on branch name pills in the Interactive Rebase modal
+- **worktreePrune** — Fixed incorrect method name call in the worktree prune command handler
+
 ## 0.3.3 (2026-05-05)
 
 ### New Features
