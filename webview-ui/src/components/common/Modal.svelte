@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
+  import { tooltip } from '../../lib/actions/tooltip';
 
   interface Props {
     title: string;
@@ -47,7 +48,7 @@
   >
     <div class="modal-header">
       <span class="modal-title">{title}</span>
-      <button class="modal-close" onclick={onClose} title="Close (Esc)"><i class="codicon codicon-close"></i></button>
+      <button class="modal-close" onclick={onClose} aria-label="Close" use:tooltip={"Close (Esc)"}><i class="codicon codicon-close"></i></button>
     </div>
     <div class="modal-body">
       {@render children()}
@@ -144,7 +145,7 @@
     gap: 8px;
     margin-bottom: 14px;
     flex-wrap: nowrap;
-    overflow: hidden;
+    overflow: visible;
   }
 
   :global(.modal-pill) {
@@ -156,13 +157,23 @@
     border-radius: 4px;
     font-size: 12px;
     font-weight: normal;
-    white-space: nowrap;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 40%;
+    position: relative;
     /* Dark theme defaults — mirrors graph ref-badge */
     background: color-mix(in srgb, var(--pill-color) 15%, transparent);
     color: #fff;
     border: 1px solid color-mix(in srgb, var(--pill-color) 25%, transparent);
   }
+
+  :global(.modal-pill-text) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
 
   :global(.modal-pill .codicon[class*='codicon-']) {
     font-size: 12px;
