@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { slide } from 'svelte/transition';
   import { getVsCodeApi } from './lib/vscode-api';
   import { commitStore } from './lib/stores/commits.svelte';
   import { branchStore } from './lib/stores/branches.svelte';
@@ -83,6 +84,7 @@
         case 'repoList':
           uiStore.repos = msg.payload.repos;
           uiStore.activeRepo = msg.payload.active;
+          commitStore.notGitRepo = false;
           break;
         case 'tagDetailsData':
           tagDetailsModal = msg.payload;
@@ -90,8 +92,13 @@
         case 'conflictData':
           conflict = msg.payload;
           break;
+        case 'notGitRepo':
+          commitStore.notGitRepo = true;
+          commitStore.setLoading(false);
+          break;
         case 'error':
           uiStore.setError(msg.payload.message);
+          commitStore.setLoading(false);
           break;
         case 'flowStatus':
           flowConfig = msg.payload.config;
@@ -344,9 +351,12 @@
   {/if}
 
   {#if uiStore.errorMessage}
-    <div class="error-bar">
+    <div class="error-bar" transition:slide={{ duration: 150 }}>
+      <i class="codicon codicon-error error-icon"></i>
       <span class="error-text">{uiStore.errorMessage}</span>
-      <button class="error-dismiss" onclick={() => uiStore.setError(null)}>{t('common.dismiss')}</button>
+      <button class="error-dismiss" onclick={() => uiStore.setError(null)} title={t('common.dismiss')}>
+        <i class="codicon codicon-close"></i>
+      </button>
     </div>
   {/if}
 
@@ -909,23 +919,44 @@
   .error-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 6px 14px;
+    padding: 7px 8px 7px 12px;
     background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
     border-bottom: 1px solid var(--vscode-inputValidation-errorBorder, #be1100);
     font-size: inherit;
-    gap: 12px;
+    gap: 8px;
+  }
+
+  .error-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    color: var(--vscode-errorForeground, #f48771);
   }
 
   .error-text {
     flex: 1;
     min-width: 0;
+    word-break: break-word;
+    line-height: 1.5;
   }
 
   .error-dismiss {
     flex-shrink: 0;
-    font-size: 11px;
-    padding: 2px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.6;
+    border-radius: 3px;
+    font-size: 14px;
+  }
+
+  .error-dismiss:hover {
+    opacity: 1;
+    background: var(--vscode-toolbar-hoverBackground, rgba(255,255,255,0.1));
   }
 
   /* ---- Rebase pause banner ---- */

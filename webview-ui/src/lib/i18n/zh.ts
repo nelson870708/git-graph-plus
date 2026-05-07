@@ -104,6 +104,7 @@ export const zh: Record<string, string> = {
   // Graph
   'graph.loading': '正在加载提交',
   'graph.noCommits': '未找到提交',
+  'graph.notGitRepo': '此文件夹不是 Git 仓库。',
   'graph.noResults': '无匹配提交',
   'graph.loadMore': '加载更多提交',
   'graph.searchResults': '显示 {count} 条搜索结果',

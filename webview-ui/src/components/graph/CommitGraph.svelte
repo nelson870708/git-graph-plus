@@ -763,6 +763,8 @@
 <div class="commit-graph" bind:this={container} onscroll={handleScroll}>
   {#if commitStore.loading && !isSearchActive}
     <div class="loading"><span class="spinner"></span> {t('graph.loading')}</div>
+  {:else if commitStore.notGitRepo}
+    <div class="empty">{t('graph.notGitRepo')}</div>
   {:else if displayCommits.length === 0}
     <div class="empty">{isSearchActive ? t('graph.noResults') : t('graph.noCommits')}</div>
   {:else}

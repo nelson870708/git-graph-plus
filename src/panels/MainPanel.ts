@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { readFile, access } from 'fs/promises';
 import { GitService, GitError } from '../git/git-service';
+import { formatGitError } from '../git/git-error-formatter';
 import { buildGraph, buildGraphFromGitOutput, buildFullGraph, buildGraphFromFullData } from '../git/git-graph-builder';
 import { FileWatcher } from '../services/file-watcher';
 import { RepoDiscoveryService, RepoInfo } from '../services/repo-discovery';
@@ -994,7 +995,13 @@ export class MainPanel {
       }
     } catch (err: unknown) {
       // Use stderr directly for GitError (cleaner than the full "git xxx failed (exit N): ..." message)
-      const errorMessage = err instanceof GitError ? err.stderr.trim().split('\n')[0] : err instanceof Error ? err.message : String(err);
+      const errorMessage = err instanceof GitError ? formatGitError(err.stderr) : err instanceof Error ? err.message : String(err);
+
+      // Detect non-git-repo errors early to avoid unnecessary follow-up git calls
+      if (err instanceof GitError && /not a git repository/.test(err.stderr)) {
+        this.panel.webview.postMessage({ type: 'notGitRepo' });
+        return;
+      }
 
       // Detect authentication errors and show a helpful message
       if (err instanceof GitError && /terminal prompts disabled|Authentication failed|could not read Username|could not read Password|Permission denied.*publickey|Host key verification failed|Could not read from remote/.test(err.stderr)) {
@@ -1152,6 +1159,9 @@ export class MainPanel {
       MainPanel.onSidebarRefresh?.();
     } catch (err) {
       console.warn('Git Graph+: refresh failed:', err instanceof Error ? err.message : err);
+      if (err instanceof GitError && /not a git repository/.test(err.stderr)) {
+        try { this.panel.webview.postMessage({ type: 'notGitRepo' }); } catch { /* panel disposed */ }
+      }
     } finally {
       this.refreshing = false;
       if (this.refreshQueued) {

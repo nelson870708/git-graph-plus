@@ -11,6 +11,7 @@ class CommitStore {
   loadingMore = $state(false);
   hasMore = $state(false);
   currentLimit = $state(0);
+  notGitRepo = $state(false);
 
   setData(data: CommitGraphData) {
     this.commits = data.commits;
@@ -23,6 +24,7 @@ class CommitStore {
     if (data.currentLimit) this.currentLimit = data.currentLimit;
     this.loading = false;
     this.loadingMore = false;
+    this.notGitRepo = false;
   }
 
   setLoading(value: boolean) {

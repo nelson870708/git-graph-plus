@@ -104,6 +104,7 @@ export const en: Record<string, string> = {
   // Graph
   'graph.loading': 'Loading commits',
   'graph.noCommits': 'No commits found',
+  'graph.notGitRepo': 'This folder is not a Git repository.',
   'graph.noResults': 'No matching commits',
   'graph.loadMore': 'Load more commits',
   'graph.searchResults': 'Showing {count} search result{plural}',

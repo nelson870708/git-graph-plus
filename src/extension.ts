@@ -19,6 +19,14 @@ export function activate(context: vscode.ExtensionContext) {
 
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand('git-graph-plus.open', () => {
+        vscode.window.showWarningMessage('Git Graph+: No workspace folder open.');
+      }),
+      vscode.commands.registerCommand('gitGraphPlus.open', () => {
+        vscode.window.showWarningMessage('Git Graph+: No workspace folder open.');
+      }),
+    );
     return;
   }
 
