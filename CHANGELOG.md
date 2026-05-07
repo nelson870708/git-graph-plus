@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.5 (2026-05-07)
+
+### Improvements
+- **Banner UI** - Unified all status banners (error, conflict, rebase-pause, bisect) to a consistent card style with rounded corners, margin, and smooth slide-in transitions
+- **Conflict Banner** - Replaced the "C" text badge on unresolved files with a proper warning icon; action buttons now use a shared global style
+- **Rebase Pause Banner** - Localized the hardcoded English message and buttons (Korean, Chinese Simplified)
+- **Error Display** - Error messages now render newlines correctly when multiple conflict files are listed
+
+### Bug Fixes
+- **Multi-repo Workspace** - Fixed sidebar and webview falling out of sync when switching repositories in a multi-repo workspace
+- **Non-Git Folder** - Opening Git Graph+ in a folder without a Git repository now shows a clear "not a Git repository" message instead of a raw fatal error
+- **Error Bar** - Loading spinner no longer stays active after an error occurs; error messages from git are now cleaned up (prefix stripping, hint line filtering, remote error priority)
+- **Webview Startup** - Fixed "command not found" error when opening the extension with no workspace folder open
+
 ## 0.3.4 (2026-05-06)
 
 ### Improvements
