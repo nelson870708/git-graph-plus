@@ -159,6 +159,46 @@ describe('GitService', () => {
     });
   });
 
+  describe('log branches filter', () => {
+    let calls: string[][];
+
+    beforeEach(() => {
+      calls = [];
+      (service as any).cachedRemoteNames = [];
+      (service as any).remoteNamesCacheTime = Date.now();
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+    });
+
+    it('passes branch names directly and omits glob args when branches is provided', async () => {
+      await service.log({ branches: ['main', 'develop'] }).catch(() => {});
+      const logCall = calls.find(c => c[0] === 'log' && !c.includes('--no-walk'));
+      expect(logCall).toContain('main');
+      expect(logCall).toContain('develop');
+      expect(logCall).not.toContain('--glob=refs/heads');
+      expect(logCall).not.toContain('--glob=refs/remotes');
+      expect(logCall).not.toContain('--glob=refs/tags');
+    });
+
+    it('passes remote branch ref correctly', async () => {
+      await service.log({ branches: ['origin/main'] }).catch(() => {});
+      const logCall = calls.find(c => c[0] === 'log' && !c.includes('--no-walk'));
+      expect(logCall).toContain('origin/main');
+      expect(logCall).not.toContain('--glob=refs/heads');
+    });
+
+    it('falls back to default globs when branches is empty array', async () => {
+      await service.log({ branches: [] }).catch(() => {});
+      const logCall = calls.find(c => c[0] === 'log' && !c.includes('--no-walk'));
+      expect(logCall).toContain('--glob=refs/heads');
+      expect(logCall).toContain('--glob=refs/remotes');
+      expect(logCall).toContain('--glob=refs/tags');
+    });
+
+    it('rejects branch name starting with -', async () => {
+      await expect(service.log({ branches: ['-bad'] })).rejects.toThrow("must not start with '-'");
+    });
+  });
+
   describe('ref safety validation', () => {
     it('checkout rejects ref starting with -', async () => {
       await expect(service.checkout('-foo')).rejects.toThrow("must not start with '-'");

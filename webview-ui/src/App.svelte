@@ -37,6 +37,7 @@
   let searchMatchedHashes = $state<Set<string> | null>(null);
   let searchNavigateHash = $state<string | null>(null);
   let remoteFilter = $state<string[]>([]);
+  let branchFilter = $state<string[]>([]);
   let resizing = $state(false);
   let conflict = $state<{ operation: string; files: Array<{ path: string; resolved: boolean }> } | null>(null);
   let rebasePaused = $state(false);
@@ -67,6 +68,7 @@
       switch (msg.type) {
         case 'logData':
           if (msg.payload.remoteFilter !== undefined) remoteFilter = msg.payload.remoteFilter;
+          if (msg.payload.branches !== undefined) branchFilter = msg.payload.branches;
           commitStore.setData(msg.payload);
           break;
         case 'branchData':
@@ -74,6 +76,7 @@
           break;
         case 'fullRefresh':
           remoteFilter = [];
+          branchFilter = [];
           branchStore.setData(msg.payload.branchData);
           commitStore.setData(msg.payload.logData);
           break;
@@ -210,7 +213,8 @@
       e.preventDefault();
       vscode.postMessage({ type: 'getLog', payload: {
         limit: commitStore.currentLimit || undefined,
-        remoteFilter: remoteFilter.length > 0 ? remoteFilter : undefined,
+        branches: branchFilter.length > 0 ? branchFilter : undefined,
+        remoteFilter: branchFilter.length > 0 ? undefined : (remoteFilter.length > 0 ? remoteFilter : undefined),
       }});
       vscode.postMessage({ type: 'getBranches' });
     }
@@ -234,11 +238,31 @@
 
   function handleFilterChange(filter: string[]) {
     remoteFilter = filter;
+    if (filter.length > 0) {
+      branchFilter = branchFilter.filter(name => {
+        const b = branchStore.branches.find(b => b.name === name);
+        if (!b) return false;
+        return b.remote ? filter.includes(b.remote) : filter.includes('local');
+      });
+    }
     vscode.postMessage({
       type: 'getLog',
       payload: {
         limit: commitStore.currentLimit || undefined,
-        remoteFilter: filter.length > 0 ? filter : undefined,
+        branches: branchFilter.length > 0 ? branchFilter : undefined,
+        remoteFilter: branchFilter.length > 0 ? undefined : (filter.length > 0 ? filter : undefined),
+      },
+    });
+  }
+
+  function handleBranchFilterChange(branches: string[]) {
+    branchFilter = branches;
+    vscode.postMessage({
+      type: 'getLog',
+      payload: {
+        limit: commitStore.currentLimit || undefined,
+        branches: branches.length > 0 ? branches : undefined,
+        remoteFilter: branches.length > 0 ? undefined : (remoteFilter.length > 0 ? remoteFilter : undefined),
       },
     });
   }
@@ -369,6 +393,9 @@
           remotes={branchStore.remotes.map(r => r.name)}
           {remoteFilter}
           onFilterChange={handleFilterChange}
+          branches={branchStore.branches}
+          {branchFilter}
+          onBranchFilterChange={handleBranchFilterChange}
         />
       {/if}
       {#if bisectMessage}

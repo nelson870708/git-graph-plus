@@ -64,6 +64,7 @@ export interface CommitGraphData {
   hasMore?: boolean;
   currentLimit?: number;
   remoteFilter?: string[];
+  branches?: string[];
 }
 
 export interface BranchInfo {
@@ -140,6 +141,7 @@ export interface WorktreeInfo {
 
 export interface LogOptions {
   branch?: string;
+  branches?: string[]; // 다중 브랜치 필터 (지정 시 glob 인자 대신 브랜치 이름을 직접 전달)
   limit?: number;
   all?: boolean;
   skip?: number;

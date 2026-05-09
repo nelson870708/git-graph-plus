@@ -12,6 +12,7 @@ export class MainPanel {
   public static currentPanel: MainPanel | undefined;
   private static readonly viewType = 'gitGraphPlus';
   private static savedRemoteFilter: string[] | undefined = undefined;
+  private static savedBranchFilter: string[] | undefined = undefined;
   private static extraEnv: Record<string, string> | undefined = undefined;
 
   private readonly panel: vscode.WebviewPanel;
@@ -23,6 +24,7 @@ export class MainPanel {
   private allConflictFiles: string[] = [];
   private currentLimit = 1000;
   private currentRemoteFilter: string[] | undefined = undefined;
+  private currentBranchFilter: string[] | undefined = undefined;
   private isFirstGetLog = true;
   private logSequence = 0;
   private cachedRepos: RepoInfo[] = [];
@@ -162,6 +164,7 @@ export class MainPanel {
     this.allConflictFiles = [];
     this.isFirstGetLog = true;
     this.currentRemoteFilter = undefined;
+    this.currentBranchFilter = undefined;
     this.logSequence = 0;
 
     const oldWatcher = this.fileWatcher;
@@ -218,9 +221,13 @@ export class MainPanel {
           const effectiveFilter = this.isFirstGetLog && message.payload.remoteFilter === undefined
             ? MainPanel.savedRemoteFilter
             : message.payload.remoteFilter;
+          const effectiveBranchFilter = this.isFirstGetLog && message.payload.branches === undefined
+            ? MainPanel.savedBranchFilter
+            : message.payload.branches;
           this.isFirstGetLog = false;
           this.currentRemoteFilter = effectiveFilter;
-          const logPayload = { ...message.payload, remoteFilter: effectiveFilter, limit: requestedLimit + 1, sortOrder };
+          this.currentBranchFilter = effectiveBranchFilter;
+          const logPayload = { ...message.payload, remoteFilter: effectiveFilter, branches: effectiveBranchFilter, limit: requestedLimit + 1, sortOrder };
           const seq = ++this.logSequence;
           const [allFetched, logBranches] = await Promise.all([
             this.gitService.log(logPayload),
@@ -243,6 +250,7 @@ export class MainPanel {
               dots: fullGraph.dots,
               commitLeftMargin: fullGraph.commitLeftMargin,
               remoteFilter: effectiveFilter,
+              branches: effectiveBranchFilter,
             },
           });
           break;
@@ -904,6 +912,7 @@ export class MainPanel {
           this.allConflictFiles = [];
           this.isFirstGetLog = true;
           this.currentRemoteFilter = undefined;
+          this.currentBranchFilter = undefined;
           this.logSequence = 0;
 
           const oldWatcher = this.fileWatcher;
@@ -1299,6 +1308,7 @@ export class MainPanel {
 
   private dispose(): void {
     MainPanel.savedRemoteFilter = this.currentRemoteFilter;
+    MainPanel.savedBranchFilter = this.currentBranchFilter;
     MainPanel.currentPanel = undefined;
     this.panel.dispose();
     while (this.disposables.length) {

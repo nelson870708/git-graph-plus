@@ -204,6 +204,9 @@ export const zh: Record<string, string> = {
   'search.next': '下一个匹配（Enter）',
   'search.filters': '筛选',
   'search.authorFilter': '作者筛选',
+  'search.branchFilter': 'Branch',
+  'search.allBranches': 'All branches',
+  'search.filterBranches': 'Search',
 
   // Activity log
   'activityLog.title': '活动日志',

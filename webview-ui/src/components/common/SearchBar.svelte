@@ -2,6 +2,7 @@
   import { commitStore } from '../../lib/stores/commits.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { tooltip } from '../../lib/actions/tooltip';
+  import type { BranchInfo } from '../../lib/types';
 
   interface Props {
     onResults: (matchedHashes: Set<string> | null) => void;
@@ -9,17 +10,74 @@
     remotes?: string[];
     remoteFilter?: string[];
     onFilterChange?: (filter: string[]) => void;
+    branches?: BranchInfo[];
+    branchFilter?: string[];
+    onBranchFilterChange?: (filter: string[]) => void;
   }
 
-  let { onResults, onNavigate, remotes = [], remoteFilter = [], onFilterChange = () => {} }: Props = $props();
+  let {
+    onResults,
+    onNavigate,
+    remotes = [],
+    remoteFilter = [],
+    onFilterChange = () => {},
+    branches = [],
+    branchFilter = [],
+    onBranchFilterChange = () => {},
+  }: Props = $props();
 
   let query = $state('');
   let matchedHashes = $state<string[]>([]);
   let currentIndex = $state(-1);
   let inputEl: HTMLInputElement | undefined = $state();
   let filterOpen = $state(false);
+  let branchFilterOpen = $state(false);
+  let branchQuery = $state('');
 
   const filterActive = $derived(remoteFilter.length > 0);
+
+  const branchFilterActive = $derived(branchFilter.length > 0);
+
+  const localBranches = $derived(
+    (remoteFilter.length === 0 || remoteFilter.includes('local'))
+      ? branches.filter(b => !b.remote)
+      : []
+  );
+
+  const remoteBranchGroups = $derived.by(() => {
+    const groups = new Map<string, BranchInfo[]>();
+    for (const b of branches.filter(b => !!b.remote && b.name !== `${b.remote}/HEAD` && b.name !== b.remote)) {
+      if (remoteFilter.length === 0 || remoteFilter.includes(b.remote!)) {
+        const key = b.remote!;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(b);
+      }
+    }
+    return groups;
+  });
+
+  function branchFullName(b: BranchInfo): string {
+    return b.name;
+  }
+
+  function filteredByQuery(list: BranchInfo[]): BranchInfo[] {
+    if (!branchQuery.trim()) return list;
+    const q = branchQuery.trim().toLowerCase();
+    return list.filter(b => branchFullName(b).toLowerCase().includes(q));
+  }
+
+  function toggleBranch(fullName: string) {
+    const next = branchFilter.includes(fullName)
+      ? branchFilter.filter(v => v !== fullName)
+      : [...branchFilter, fullName];
+    onBranchFilterChange(next);
+  }
+
+  function clearBranchFilter() {
+    branchFilterOpen = false;
+    branchQuery = '';
+    onBranchFilterChange([]);
+  }
 
   function doSearch() {
     const q = query.trim().toLowerCase();
@@ -79,7 +137,9 @@
       }
     }
     if (e.key === 'Escape') {
-      if (filterOpen) {
+      if (branchFilterOpen) {
+        branchFilterOpen = false;
+      } else if (filterOpen) {
         filterOpen = false;
       } else {
         clear();
@@ -190,6 +250,75 @@
             </button>
           {/each}
         {/if}
+      </div>
+    {/if}
+  </div>
+
+  <div class="filter-wrap">
+    <button
+      class="filter-btn"
+      class:active={branchFilterActive}
+      onclick={() => { branchFilterOpen = !branchFilterOpen; }}
+      use:tooltip={t('search.branchFilter')}
+    >
+      <i class="codicon codicon-git-branch filter-btn-icon"></i>
+      <span class="filter-label">
+        {t('search.branchFilter')}
+        {#if branchFilterActive}<span class="filter-count">{branchFilter.length}</span>{/if}
+      </span>
+      <i class="codicon {branchFilterOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'} chevron"></i>
+    </button>
+
+    {#if branchFilterOpen}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="backdrop" onclick={() => { branchFilterOpen = false; }}></div>
+      <div class="dropdown branch-dropdown">
+        <div class="branch-search-wrap">
+          <input
+            class="branch-search-input"
+            type="text"
+            bind:value={branchQuery}
+            placeholder={t('search.filterBranches')}
+            autocomplete="off"
+          />
+        </div>
+        <button class="dd-item" class:active={!branchFilterActive} onclick={clearBranchFilter}>
+          <input type="checkbox" checked={!branchFilterActive} readonly />
+          {t('search.allBranches')}
+        </button>
+        {#if filteredByQuery(localBranches).length > 0}
+          <div class="dd-sep"></div>
+          <div class="dd-section-header">LOCAL</div>
+          {#each filteredByQuery(localBranches) as b}
+            <button
+              class="dd-item"
+              class:active={branchFilter.includes(b.name)}
+              onclick={() => toggleBranch(b.name)}
+            >
+              <input type="checkbox" checked={branchFilter.includes(b.name)} readonly />
+              {b.name}
+            </button>
+          {/each}
+        {/if}
+        {#each remoteBranchGroups as [remote, rBranches]}
+          {#if filteredByQuery(rBranches).length > 0}
+            <div class="dd-sep"></div>
+            <div class="dd-section-header">
+              <i class="codicon codicon-cloud remote-icon"></i>{remote}
+            </div>
+            {#each filteredByQuery(rBranches) as b}
+              <button
+                class="dd-item"
+                class:active={branchFilter.includes(b.name)}
+                onclick={() => toggleBranch(b.name)}
+              >
+                <input type="checkbox" checked={branchFilter.includes(b.name)} readonly />
+                {b.name}
+              </button>
+            {/each}
+          {/if}
+        {/each}
       </div>
     {/if}
   </div>
@@ -474,4 +603,46 @@
   .remote-icon {
     font-size: 13px;
   }
+
+  .branch-dropdown {
+    min-width: 200px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .branch-search-wrap {
+    padding: 6px 8px 4px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .branch-search-input {
+    width: 100%;
+    background: var(--input-bg, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: inherit;
+    font-family: inherit;
+    padding: 3px 6px;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .branch-search-input:focus {
+    border-color: var(--vscode-focusBorder, #007fd4);
+  }
+
+  .dd-section-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
 </style>

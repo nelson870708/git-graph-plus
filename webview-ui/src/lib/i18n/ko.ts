@@ -204,6 +204,9 @@ export const ko: Record<string, string> = {
   'search.next': '다음 결과 (Enter)',
   'search.filters': '필터',
   'search.authorFilter': '작성자 필터',
+  'search.branchFilter': 'Branch',
+  'search.allBranches': 'All branches',
+  'search.filterBranches': 'Search',
 
   // Activity log
   'activityLog.title': '활동 로그',

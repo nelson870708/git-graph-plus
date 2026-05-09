@@ -179,7 +179,12 @@ export class GitService {
       '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
     ];
 
-    if (!options?.remoteFilter || options.remoteFilter.length === 0) {
+    if (options?.branches && options.branches.length > 0) {
+      for (const branch of options.branches) {
+        this.assertSafeRef(branch, 'log');
+        args.push(branch);
+      }
+    } else if (!options?.remoteFilter || options.remoteFilter.length === 0) {
       args.push('--glob=refs/heads', '--glob=refs/remotes', '--glob=refs/tags');
     } else {
       for (const source of options.remoteFilter) {
@@ -248,7 +253,10 @@ export class GitService {
             const parentIdx = commitHashIndex.get(sc.parents[0]);
             if (parentIdx !== undefined) {
               insertions.push({ idx: parentIdx, commit: sc });
-            } else if (!options?.remoteFilter || options.remoteFilter.length === 0) {
+            } else if (
+              (!options?.remoteFilter || options.remoteFilter.length === 0) &&
+              (!options?.branches || options.branches.length === 0)
+            ) {
               insertions.push({ idx: -1, commit: sc });
             }
           }

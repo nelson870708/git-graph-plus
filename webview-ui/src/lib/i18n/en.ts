@@ -204,6 +204,9 @@ export const en: Record<string, string> = {
   'search.next': 'Next match (Enter)',
   'search.filters': 'Filters',
   'search.authorFilter': 'Author filter',
+  'search.branchFilter': 'Branch',
+  'search.allBranches': 'All branches',
+  'search.filterBranches': 'Search',
 
   // Activity log
   'activityLog.title': 'Activity Log',
