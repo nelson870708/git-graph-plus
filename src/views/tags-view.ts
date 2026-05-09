@@ -56,7 +56,7 @@ class TagItem extends vscode.TreeItem {
     this.command = {
       command: 'gitGraphPlus.showTagMenu',
       title: 'Show Tag Menu',
-      arguments: [this],
+      arguments: [{ tag: this.tag }],
     };
   }
 }

@@ -56,7 +56,7 @@ class StashItem extends vscode.TreeItem {
     this.command = {
       command: 'gitGraphPlus.showStashMenu',
       title: 'Show Stash Menu',
-      arguments: [this],
+      arguments: [{ stash: this.stash, index: this.stash.index }],
     };
   }
 }

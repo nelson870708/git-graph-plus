@@ -391,6 +391,59 @@ export function activate(context: vscode.ExtensionContext) {
         });
       }
     }),
+    vscode.commands.registerCommand('gitGraphPlus.showBranchMenu', (branchItem) => {
+      const branch = branchItem?.branch;
+      if (branch) {
+        vscode.window.showQuickPick([
+          { label: `Checkout ${branch.name}`, id: 'checkout' },
+          { label: `Merge into current branch...`, id: 'merge' },
+          { label: `Rename ${branch.name}...`, id: 'rename' },
+          { label: `Delete ${branch.name}...`, id: 'delete' },
+        ]).then(selected => {
+          if (!selected) return;
+          switch (selected.id) {
+            case 'checkout': vscode.commands.executeCommand('gitGraphPlus.checkoutBranch', branchItem); break;
+            case 'merge': vscode.commands.executeCommand('gitGraphPlus.mergeBranch', branchItem); break;
+            case 'rename': vscode.commands.executeCommand('gitGraphPlus.renameBranch', branchItem); break;
+            case 'delete': vscode.commands.executeCommand('gitGraphPlus.deleteBranch', branchItem); break;
+          }
+        });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.showTagMenu', (tagItem) => {
+      const tag = tagItem?.tag;
+      if (tag) {
+        vscode.window.showQuickPick([
+          { label: `Push ${tag.name} to remote`, id: 'push' },
+          { label: `Delete tag ${tag.name}`, id: 'delete' },
+          { label: `Delete remote tag ${tag.name}`, id: 'deleteRemote' },
+        ]).then(selected => {
+          if (!selected) return;
+          switch (selected.id) {
+            case 'push': vscode.commands.executeCommand('gitGraphPlus.pushTag', tagItem); break;
+            case 'delete': vscode.commands.executeCommand('gitGraphPlus.deleteTag', tagItem); break;
+            case 'deleteRemote': vscode.commands.executeCommand('gitGraphPlus.deleteRemoteTag', tagItem); break;
+          }
+        });
+      }
+    }),
+    vscode.commands.registerCommand('gitGraphPlus.showStashMenu', (stashItem) => {
+      const stash = stashItem?.stash;
+      if (stash) {
+        vscode.window.showQuickPick([
+          { label: `Apply stash@{${stash.index}}`, id: 'apply' },
+          { label: `Pop stash@{${stash.index}}`, id: 'pop' },
+          { label: `Drop stash@{${stash.index}}`, id: 'drop' },
+        ]).then(selected => {
+          if (!selected) return;
+          switch (selected.id) {
+            case 'apply': vscode.commands.executeCommand('gitGraphPlus.stashApply', stashItem); break;
+            case 'pop': vscode.commands.executeCommand('gitGraphPlus.stashPop', stashItem); break;
+            case 'drop': vscode.commands.executeCommand('gitGraphPlus.stashDrop', stashItem); break;
+          }
+        });
+      }
+    }),
     vscode.commands.registerCommand('gitGraphPlus.checkoutRemoteBranchExplicit', (branch) => {
       if (branch) {
         const localName = branch.name.split('/').slice(1).join('/');

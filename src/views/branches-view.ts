@@ -196,7 +196,7 @@ class BranchLeafItem extends vscode.TreeItem {
     this.command = {
       command: 'gitGraphPlus.showBranchMenu',
       title: 'Show Branch Menu',
-      arguments: [this],
+      arguments: [{ branch: this.branch }],
     };
   }
 }

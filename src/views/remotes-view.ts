@@ -108,7 +108,7 @@ class RemoteBranchItem extends vscode.TreeItem {
     this.command = {
       command: 'gitGraphPlus.showRemoteBranchMenu',
       title: 'Show Remote Branch Menu',
-      arguments: [this],
+      arguments: [{ branch: this.branch }],
     };
   }
 }
