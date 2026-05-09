@@ -52,11 +52,13 @@
   let showAddWorktreeModal = $state(false);
   let addWorktreeDefaultPath = $state('');
   let renameBranchNew = $state('');
+  $effect(() => { if (modalStore.renameBranch.show) renameBranchNew = modalStore.renameBranch.oldName; });
   let stashRenameNew = $state('');
   $effect(() => { if (modalStore.stashRename.show) stashRenameNew = modalStore.stashRename.message; });
   let stashSaveMessage = $state('');
   let stashSaveIncludeUntracked = $state(true);
   let stashSaveKeepIndex = $state(false);
+  $effect(() => { if (modalStore.stashSave.show) { stashSaveMessage = ''; stashSaveIncludeUntracked = true; stashSaveKeepIndex = false; } });
   let deleteWorktreeBranch = $state(false);
   let tagDetailsModal = $state<{ name: string; hash: string; message?: string; isAnnotated: boolean } | null>(null);
 
@@ -134,7 +136,6 @@
           } else if (msg.payload.modal === 'stashPop') {
             modalStore.openStashApply(msg.payload.index, msg.payload.message, true);
           } else if (msg.payload.modal === 'renameBranch') {
-            renameBranchNew = msg.payload.branchName;
             modalStore.openRenameBranch(msg.payload.branchName);
           } else if (msg.payload.modal === 'mergeBranch') {
             modalStore.openMerge(msg.payload.branchName, branchStore.currentBranch?.name ?? 'HEAD');
@@ -143,7 +144,6 @@
           } else if (msg.payload.modal === 'createTag') {
             modalStore.openCreateTag('HEAD');
           } else if (msg.payload.modal === 'stashSave') {
-            stashSaveMessage = ''; stashSaveIncludeUntracked = true; stashSaveKeepIndex = false;
             modalStore.openStashSave();
           } else if (msg.payload.modal === 'checkoutRemote') {
             modalStore.openCheckoutRemote(msg.payload.remoteName, msg.payload.localName);

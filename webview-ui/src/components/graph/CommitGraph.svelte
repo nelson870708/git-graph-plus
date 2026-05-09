@@ -210,8 +210,6 @@
   let resetTarget = $state('');
   let resetMode = $state<'soft' | 'mixed' | 'hard'>('mixed');
 
-  let renameBranchNew = $state('');
-
   // Confirmation modals
   let showRebaseModal = $state(false);
   let rebaseTarget = $state('');
@@ -458,7 +456,7 @@
               { separator: true, label: '', action: () => {} },
               {
                 label: t('graph.rename'),
-                action: () => { renameBranchNew = branchName; modalStore.openRenameBranch(branchName); },
+                action: () => { modalStore.openRenameBranch(branchName); },
               },
               {
                 label: t('graph.removeWorktree'),
@@ -502,7 +500,7 @@
               { separator: true, label: '', action: () => {} },
               {
                 label: t('graph.rename'),
-                action: () => { renameBranchNew = branchName; modalStore.openRenameBranch(branchName); },
+                action: () => { modalStore.openRenameBranch(branchName); },
               },
               {
                 label: t('graph.deleteBranch'),
