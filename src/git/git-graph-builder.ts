@@ -39,33 +39,6 @@ export interface FullGraphData {
   commitLeftMargin: number[];
 }
 
-// ── Color picker (queue-based like SourceGit) ──
-class ColorPicker {
-  private queue: number[] = [];
-  private recycled: Set<number> = new Set();
-  private count: number;
-
-  constructor(count: number) {
-    this.count = count;
-  }
-
-  next(): number {
-    if (this.queue.length === 0) {
-      for (let i = 0; i < this.count; i++) this.queue.push(i);
-      this.recycled.clear();
-    }
-    const idx = this.queue.shift()!;
-    this.recycled.delete(idx);
-    return idx;
-  }
-
-  recycle(idx: number) {
-    if (!this.recycled.has(idx)) {
-      this.recycled.add(idx);
-      this.queue.push(idx);
-    }
-  }
-}
 
 // ── PathHelper (exact SourceGit port) ──
 class PathHelper {
@@ -276,6 +249,14 @@ function buildPushedSet(commits: Commit[]): Set<string> {
   return pushed;
 }
 
+function pickColor(unsolved: PathHelper[]): number {
+  const used = new Set(unsolved.map(p => p.path.color));
+  for (let i = 0; i < COLOR_PALETTE.length; i++) {
+    if (!used.has(i)) return i;
+  }
+  return 0;
+}
+
 // ── Main parse function (SourceGit CommitGraph.Parse port) ──
 
 export function buildFullGraph(commits: Commit[], branches: BranchInfo[] = []): FullGraphData {
@@ -293,7 +274,6 @@ export function buildFullGraph(commits: Commit[], branches: BranchInfo[] = []): 
 
   const unsolved: PathHelper[] = [];
   const ended: PathHelper[] = [];
-  const colorPicker = new ColorPicker(COLOR_PALETTE.length);
   let offsetY = -HALF_H;
   const { tipSet: remoteTipSet, allSet: remoteOnlySet } = buildRemoteOnlyData(commits, branches);
   const pushedSet = buildPushedSet(commits);
@@ -330,7 +310,6 @@ export function buildFullGraph(commits: Commit[], branches: BranchInfo[] = []): 
     // Remove ended paths in a single O(n) pass
     if (ended.length > 0) {
       const toRemove = new Set(ended);
-      for (const e of ended) colorPicker.recycle(e.path.color);
       let w = 0;
       for (let r = 0; r < unsolved.length; r++) {
         if (!toRemove.has(unsolved[r])) unsolved[w++] = unsolved[r];
@@ -343,7 +322,7 @@ export function buildFullGraph(commits: Commit[], branches: BranchInfo[] = []): 
     if (major === null) {
       offsetX += UNIT_W;
       if (commit.parents.length > 0) {
-        major = new PathHelper(commit.parents[0], colorPicker.next(), { x: offsetX, y: offsetY });
+        major = new PathHelper(commit.parents[0], pickColor(unsolved), { x: offsetX, y: offsetY });
         unsolved.push(major);
         result.paths.push(major.path);
       }
@@ -376,7 +355,7 @@ export function buildFullGraph(commits: Commit[], branches: BranchInfo[] = []): 
         } else {
           // New path for merge parent
           offsetX += UNIT_W;
-          const l = new PathHelper(parentHash, colorPicker.next(), position, { x: offsetX, y: position.y + HALF_H });
+          const l = new PathHelper(parentHash, pickColor(unsolved), position, { x: offsetX, y: position.y + HALF_H });
           unsolved.push(l);
           result.paths.push(l.path);
         }
