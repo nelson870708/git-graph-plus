@@ -219,7 +219,7 @@
       vscode.postMessage({ type: 'getBranches' });
     }
 
-    if (e.key === 'Escape' && uiStore.showBottomPanel && (uiStore.selectedCommitHash || uiStore.comparing)) {
+    if (e.key === 'Escape' && !modalStore.anyOpen && uiStore.showBottomPanel && (uiStore.selectedCommitHash || uiStore.comparing)) {
       e.preventDefault();
       uiStore.selectedCommitHash = null;
       uiStore.comparing = false;

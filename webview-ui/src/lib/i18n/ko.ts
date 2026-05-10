@@ -496,6 +496,8 @@ export const ko: Record<string, string> = {
 
   // LFS
   'lfs.locked': '{owner}가 잠금',
+  'file.open': '파일 열기',
+  'file.openChanges': '변경 내용 열기',
   'lfs.lock': 'LFS 잠금',
   'lfs.unlock': 'LFS 잠금 해제',
   'lfs.unlockForce': 'LFS 강제 잠금 해제',

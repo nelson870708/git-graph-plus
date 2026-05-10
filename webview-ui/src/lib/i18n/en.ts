@@ -493,6 +493,10 @@ export const en: Record<string, string> = {
   'bisect.banner.skip': 'Skip',
   'bisect.banner.reset': 'Reset',
 
+  // File context menu
+  'file.open': 'Open File',
+  'file.openChanges': 'Open Changes',
+
   // LFS
   'lfs.locked': 'Locked by {owner}',
   'lfs.lock': 'LFS Lock',

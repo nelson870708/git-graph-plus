@@ -32,6 +32,7 @@ export type WebviewMessage =
   | { type: 'addRemote'; payload: { name: string; url: string } }
   | { type: 'removeRemote'; payload: { name: string } }
   | { type: 'openDiff'; payload: { file: string; commitHash?: string; ref1?: string; ref2?: string } }
+  | { type: 'openFile'; payload: { file: string } }
   | { type: 'stashDrop'; payload: { index: number } }
   | { type: 'stashRename'; payload: { index: number; message: string } }
   | { type: 'worktreeAdd'; payload: { path: string; branch?: string; newBranch?: string } }

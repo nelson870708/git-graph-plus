@@ -356,10 +356,27 @@
                     e.preventDefault();
                     const items: Array<{ label: string; action: () => void; danger?: boolean; separator?: boolean }> = [];
 
-                    // File history - always available
+                    // Open file
                     items.push({
-                      label: t('lfs.fileHistory'),
-                      action: () => { vscode.postMessage({ type: 'searchByFile', payload: { file: node.path } }); fileContextMenu = null; },
+                      label: t('file.open'),
+                      action: () => { vscode.postMessage({ type: 'openFile', payload: { file: node.path } }); fileContextMenu = null; },
+                    });
+
+                    // Open changes (diff)
+                    items.push({
+                      label: t('file.openChanges'),
+                      action: () => {
+                        if (commit) {
+                          vscode.postMessage({ type: 'openDiff', payload: { file: node.path, commitHash: commit.hash } });
+                        } else if (uiStore.comparing && uiStore.compareRef1 && uiStore.compareRef2) {
+                          vscode.postMessage({ type: 'openDiff', payload: { file: node.path, ref1: uiStore.compareRef1, ref2: uiStore.compareRef2 } });
+                        } else if (uiStore.comparing && uiStore.compareRef1) {
+                          vscode.postMessage({ type: 'openDiff', payload: { file: node.path, ref1: uiStore.compareRef1, ref2: 'working' } });
+                        } else {
+                          vscode.postMessage({ type: 'openDiff', payload: { file: node.path } });
+                        }
+                        fileContextMenu = null;
+                      },
                     });
 
                     // LFS actions - only for LFS files
@@ -526,6 +543,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    font-size: var(--vscode-font-size, 13px);
   }
 
   /* ── Top tabs ── */
@@ -557,7 +575,7 @@
     color: var(--text-secondary);
     cursor: pointer;
     border-radius: 3px;
-    font-size: 14px;
+    font-size: 1.08em;
   }
 
   .tab-action-btn:hover {
@@ -570,7 +588,6 @@
     align-items: center;
     gap: 5px;
     padding: 8px 16px;
-    font-size: 13px;
     font-weight: normal;
     background: transparent;
     color: var(--text-secondary);
@@ -592,7 +609,7 @@
   .tab-count {
     opacity: 0.6;
     font-weight: normal;
-    font-size: 10px;
+    font-size: 0.75em;
   }
 
   /* ── Commit tab ── */
@@ -619,7 +636,7 @@
   }
 
   .info-label {
-    font-size: 11px;
+    font-size: 0.85em;
     font-weight: 600;
     color: var(--text-secondary);
     margin-bottom: 8px;
@@ -643,7 +660,6 @@
   }
 
   .person-name {
-    font-size: 13px;
     font-weight: normal;
   }
 
@@ -670,13 +686,12 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 13px;
   }
 
   .meta-label {
     width: 65px;
     flex-shrink: 0;
-    font-size: 11px;
+    font-size: 0.85em;
     font-weight: 600;
     color: var(--text-secondary);
   }
@@ -688,7 +703,6 @@
 
   .mono {
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 13px;
   }
 
   .parent-link {
@@ -697,7 +711,6 @@
     border: none;
     cursor: pointer;
     font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 13px;
     padding: 0;
   }
 
@@ -711,7 +724,7 @@
     gap: 3px;
     padding: 2px 8px;
     border-radius: 0;
-    font-size: 12px;
+    font-size: 0.9em;
     font-weight: normal;
     margin-right: 6px;
     border: 1px solid rgba(128, 128, 128, 0.15);
@@ -720,7 +733,7 @@
   }
 
   .ref-icon {
-    font-size: 12px;
+    font-size: 0.9em;
     flex-shrink: 0;
     opacity: 0.7;
   }
@@ -734,12 +747,11 @@
 
   .message-subject {
     font-weight: 700;
-    font-size: 15px;
+    font-size: 1.15em;
     line-height: 1.4;
   }
 
   .message-body {
-    font-size: 13px;
     color: var(--text-primary);
     white-space: pre-wrap;
     line-height: 1.6;
@@ -781,7 +793,6 @@
     border: none;
     border-radius: 0;
     cursor: pointer;
-    font-size: 13px;
   }
 
   .file-item:hover, .dir-item:hover { background: var(--bg-hover); }
@@ -797,7 +808,7 @@
   .dir-name { min-width: 0; }
   .file-status {
     margin-left: auto;
-    font-size: 11px;
+    font-size: 0.85em;
     font-weight: 600;
     font-family: var(--vscode-editor-font-family, monospace);
     flex-shrink: 0;
@@ -830,7 +841,7 @@
     z-index: 5;
   }
 
-  .diff-file-name { font-weight: 600; font-size: 13px; }
+  .diff-file-name { font-weight: 600; font-size: var(--vscode-font-size, 13px); }
 
   .diff-mode-toggle {
     display: flex;
@@ -842,7 +853,7 @@
 
   .diff-mode-toggle button {
     padding: 2px 8px;
-    font-size: 10px;
+    font-size: 0.75em;
     border-radius: 2px;
     background: transparent;
     color: var(--text-secondary);
@@ -879,7 +890,7 @@
     padding-right: 8px;
     color: var(--text-secondary);
     opacity: 0.5;
-    font-size: 11px;
+    font-size: 0.9em;
     user-select: none;
   }
 
@@ -926,7 +937,7 @@
     align-items: center;
     gap: 2px;
     padding: 0 4px;
-    font-size: 9px;
+    font-size: 0.7em;
     font-weight: 600;
     border-radius: 3px;
     background: rgba(156, 39, 176, 0.15);
@@ -955,7 +966,7 @@
   }
 
   .lfs-badge i {
-    font-size: 9px;
+    font-size: 1em;
   }
 
 </style>

@@ -496,6 +496,8 @@ export const zh: Record<string, string> = {
 
   // LFS
   'lfs.locked': '由 {owner} 锁定',
+  'file.open': '打开文件',
+  'file.openChanges': '打开更改',
   'lfs.lock': 'LFS 锁定',
   'lfs.unlock': 'LFS 解锁',
   'lfs.unlockForce': 'LFS 强制解锁',

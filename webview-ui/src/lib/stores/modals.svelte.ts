@@ -104,6 +104,15 @@ class ModalStore {
   pushTag = $state({ show: false, tagName: '', remote: 'origin' });
   openPushTag(tagName: string, remote = 'origin') { this.pushTag = { show: true, tagName, remote }; }
   closePushTag() { this.pushTag = { show: false, tagName: '', remote: 'origin' }; }
+
+  get anyOpen(): boolean {
+    return this.deleteBranch.show || this.deleteTag.show || this.createBranch.show ||
+      this.createTag.show || this.merge.show || this.checkoutRemote.show ||
+      this.renameBranch.show || this.deleteRemoteBranch.show || this.removeWorktree.show ||
+      this.stashApply.show || this.stashRename.show || this.stashSave.show ||
+      this.setUpstream.show || this.fetch.show || this.pull.show || this.push.show ||
+      this.flowInit.show || this.flowStart.show || this.flowFinish.show || this.pushTag.show;
+  }
 }
 
 export const modalStore = new ModalStore();

@@ -440,6 +440,11 @@ export class MainPanel {
           }
           break;
         }
+        case 'openFile': {
+          const fileUri = vscode.Uri.file(path.join(this.repoPath, message.payload.file));
+          await vscode.window.showTextDocument(fileUri, { preview: false });
+          break;
+        }
         case 'fetch': {
           await this.gitService.fetch(message.payload.remote, { prune: message.payload.prune });
           this.panel.webview.postMessage({
