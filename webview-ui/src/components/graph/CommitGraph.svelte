@@ -884,7 +884,7 @@
               if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
               const localRef = commit.refs.find(r => r.type === 'head' || r.type === 'branch');
               if (localRef) {
-                doCheckout(localRef.name);
+                doCheckout(localRef.name, false, {}, true);
               } else {
                 const remoteRef = commit.refs.find(r => r.type === 'remote-branch' && r.name !== 'HEAD');
                 if (remoteRef) {
@@ -943,13 +943,13 @@
                       use:tooltip={trackedUpstream ?? ''}
                       ondblclick={(e) => {
                         e.stopPropagation();
-                        doCheckout(ref.name);
+                        doCheckout(ref.name, false, {}, true);
                       }}
                       role="button"
                       tabindex={0}
                       onkeydown={(e) => {
                         if (e.key === 'Enter') {
-                          doCheckout(ref.name);
+                          doCheckout(ref.name, false, {}, true);
                         }
                       }}
                     >
@@ -976,7 +976,7 @@
                       } else if (ref.type === 'tag' || ref.type === 'stash') {
                         openCheckoutCommitModal(ref.type === 'stash' ? commit.hash : ref.name);
                       } else {
-                        doCheckout(ref.name);
+                        doCheckout(ref.name, false, {}, true);
                       }
                     }}
                     role="button"
@@ -995,7 +995,7 @@
                         } else if (ref.type === 'tag' || ref.type === 'stash') {
                           openCheckoutCommitModal(ref.type === 'stash' ? commit.hash : ref.name);
                         } else {
-                          doCheckout(ref.name);
+                          doCheckout(ref.name, false, {}, true);
                         }
                       }
                     }}
