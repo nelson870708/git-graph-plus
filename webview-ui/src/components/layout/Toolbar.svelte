@@ -519,29 +519,30 @@
 
   .btn-badge {
     position: absolute;
-    top: -2px;
-    right: -2px;
+    top: -3px;
+    right: -3px;
     font-size: 10px;
-    font-weight: 600;
-    padding: 0 5px;
+    font-weight: 700;
+    padding: 0 4px;
     border-radius: 8px;
-    min-width: 16px;
+    min-width: 17px;
     text-align: center;
-    line-height: 16px;
+    line-height: 17px;
+    box-shadow: 0 0 0 1.5px var(--vscode-editor-background, #1e1e1e);
   }
 
   .pull-badge {
-    background: var(--vscode-notificationsWarningIcon-foreground, #cca700);
+    background: #e08c00;
     color: #fff;
   }
 
   .push-badge {
-    background: var(--button-bg);
-    color: var(--button-fg);
+    background: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #fff);
   }
 
   .unpublished-icon {
-    color: var(--button-bg);
+    color: var(--vscode-button-background, #0e639c);
     font-size: 18px;
   }
 
