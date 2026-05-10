@@ -205,7 +205,7 @@ export const en: Record<string, string> = {
   'search.filters': 'Filters',
   'search.authorFilter': 'Author filter',
   'search.branchFilter': 'Branch',
-  'search.allBranches': 'All branches',
+  'search.allBranches': 'All',
   'search.filterBranches': 'Search',
 
   // Activity log

@@ -205,7 +205,7 @@ export const ko: Record<string, string> = {
   'search.filters': '필터',
   'search.authorFilter': '작성자 필터',
   'search.branchFilter': 'Branch',
-  'search.allBranches': 'All branches',
+  'search.allBranches': 'All',
   'search.filterBranches': 'Search',
 
   // Activity log

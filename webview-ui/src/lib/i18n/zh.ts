@@ -205,7 +205,7 @@ export const zh: Record<string, string> = {
   'search.filters': '筛选',
   'search.authorFilter': '作者筛选',
   'search.branchFilter': 'Branch',
-  'search.allBranches': 'All branches',
+  'search.allBranches': 'All',
   'search.filterBranches': 'Search',
 
   // Activity log

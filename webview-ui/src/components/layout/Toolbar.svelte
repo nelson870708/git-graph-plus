@@ -215,6 +215,7 @@
       <button
         class="toolbar-btn"
         onclick={openFlowDropdown}
+        disabled={uiStore.operating !== null}
         aria-label={t('flow.button')}
         use:tooltip={t('flow.button')}
       >
