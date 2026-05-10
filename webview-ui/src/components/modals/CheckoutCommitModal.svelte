@@ -55,10 +55,6 @@
 </script>
 
 <Modal title={t('checkoutCommit.title')} {onClose}>
-  <div class="modal-context-card">
-    <span use:tooltip={hash} class="modal-pill modal-pill--target"><i class="codicon codicon-git-commit"></i><span class="modal-pill-text">{hash.substring(0, 7)}</span></span>
-  </div>
-
   {#if linkedBranches.length > 0}
     <div class="modal-context-card">
       {#each linkedBranches as branch}
@@ -72,6 +68,13 @@
       {/each}
     </div>
   {:else}
+    {@const isHash = /^[0-9a-f]{7,40}$/i.test(hash)}
+    <div class="modal-context-card">
+      <span use:tooltip={hash} class="modal-pill modal-pill--target">
+        <i class="codicon {isHash ? 'codicon-git-commit' : 'codicon-git-branch'}"></i>
+        <span class="modal-pill-text">{isHash ? hash.substring(0, 7) : hash}</span>
+      </span>
+    </div>
     <div class="modal-warning">
       <i class="codicon codicon-warning"></i>
       <span>{t('checkoutCommit.detachedWarning')}</span>

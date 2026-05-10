@@ -276,7 +276,10 @@
       if (event.data.type === 'dirtyState') {
         removeTimedMessageHandler(handler);
         if (event.data.payload.dirty) {
-          openCheckoutCommitModal(ref);
+          const branchCommit = commitStore.commits.find(c =>
+            c.refs.some(r => r.name === ref && (r.type === 'branch' || r.type === 'head'))
+          );
+          openCheckoutCommitModal(branchCommit?.hash ?? ref);
         } else {
           vscode.postMessage({ type: 'checkout', payload: { ref, pullAfter } });
         }
