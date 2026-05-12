@@ -184,6 +184,21 @@
 
   // Syntax highlighting for commit diff
   let highlightedLines = $state<Map<string, string>>(new Map());
+  let sbsLeftEl = $state<HTMLElement | undefined>();
+  let sbsRightEl = $state<HTMLElement | undefined>();
+  let isSyncing = false;
+
+  function handleSbsScroll(e: Event) {
+    if (isSyncing) return;
+    const target = e.target as HTMLElement;
+    const other = target === sbsLeftEl ? sbsRightEl : sbsLeftEl;
+    if (other) {
+      isSyncing = true;
+      other.scrollTop = target.scrollTop;
+      other.scrollLeft = target.scrollLeft;
+      requestAnimationFrame(() => { isSyncing = false; });
+    }
+  }
 
   $effect(() => {
     if (selectedDiff && !selectedDiff.isBinary) {
@@ -472,21 +487,10 @@
             </div>
           {:else}
             <div class="diff-sbs">
-              {#each selectedDiff.hunks as hunk, hunkIdx}
-                {#if hunkIdx > 0}<div class="hunk-separator" aria-hidden="true"></div>{/if}
-                <div
-                  class="sbs-container"
-                  onscroll={(e) => {
-                    const target = e.currentTarget;
-                    const left = target.querySelector('.sbs-left') as HTMLElement;
-                    const right = target.querySelector('.sbs-right') as HTMLElement;
-                    if (left && right) {
-                      left.scrollTop = target.scrollTop;
-                      right.scrollTop = target.scrollTop;
-                    }
-                  }}
-                >
-                  <div class="sbs-left">
+              <div class="sbs-pane sbs-left" bind:this={sbsLeftEl} onscroll={handleSbsScroll}>
+                <div class="sbs-inner">
+                  {#each selectedDiff.hunks as hunk, hunkIdx}
+                    {#if hunkIdx > 0}<div class="hunk-separator" aria-hidden="true"></div>{/if}
                     {#each hunk.lines as line, lineIndex}
                       {#if line.type === 'context' || line.type === 'delete'}
                         <div class="diff-line diff-{line.type}">
@@ -500,8 +504,13 @@
                         </div>
                       {/if}
                     {/each}
-                  </div>
-                  <div class="sbs-right">
+                  {/each}
+                </div>
+              </div>
+              <div class="sbs-pane sbs-right" bind:this={sbsRightEl} onscroll={handleSbsScroll}>
+                <div class="sbs-inner">
+                  {#each selectedDiff.hunks as hunk, hunkIdx}
+                    {#if hunkIdx > 0}<div class="hunk-separator" aria-hidden="true"></div>{/if}
                     {#each hunk.lines as line, lineIndex}
                       {#if line.type === 'context' || line.type === 'add'}
                         <div class="diff-line diff-{line.type}">
@@ -515,9 +524,9 @@
                         </div>
                       {/if}
                     {/each}
-                  </div>
+                  {/each}
                 </div>
-              {/each}
+              </div>
             </div>
           {/if}
           </div>
@@ -864,13 +873,20 @@
     color: var(--button-fg);
   }
 
-  .diff-content { padding: 0; min-width: max-content; }
+  .diff-content {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 100%;
+    width: max-content;
+  }
 
   .hunk-separator {
     height: 0;
     border-top: 1px dashed var(--border-color);
     margin: 6px 0;
     opacity: 0.6;
+    width: 100%;
   }
 
   .diff-line {
@@ -909,6 +925,8 @@
 
   .line-content {
     white-space: pre;
+    padding-left: 4px;
+    padding-right: 24px;
   }
 
   .diff-empty {
@@ -918,19 +936,34 @@
   }
 
   /* Side-by-side */
-  .diff-sbs { min-width: max-content; }
-
-  .sbs-container {
+  .diff-sbs {
     display: flex;
+    height: 100%;
+    width: 100%;
   }
 
-  .sbs-left, .sbs-right {
+  .sbs-pane {
     flex: 1;
-    min-width: 50%;
-    overflow: hidden;
+    min-width: 0;
+    overflow: auto;
+    background: var(--bg-primary);
   }
 
-  .sbs-left { border-right: 1px solid var(--border-color); }
+  .sbs-inner {
+    display: flex;
+    flex-direction: column;
+    min-width: 100%;
+    width: max-content;
+    min-height: 100%;
+  }
+
+  .sbs-left {
+    border-right: 1px solid var(--border-color);
+  }
+
+  .sbs-pane .diff-line {
+    width: 100%;
+  }
 
   .lfs-badge {
     display: flex;
