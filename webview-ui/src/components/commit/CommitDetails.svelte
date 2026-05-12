@@ -62,6 +62,15 @@
     }
   });
 
+  $effect(() => {
+    if (selectedFile && activeHash) {
+      // Check if we already have the diff
+      if (!diffs.some(d => d.file === selectedFile)) {
+         vscode.postMessage({ type: 'getFileDiff', payload: { hash: activeHash, file: selectedFile } });
+      }
+    }
+  });
+
   onMount(() => {
     function handleMessage(event: MessageEvent) {
       const msg = event.data;
@@ -69,7 +78,13 @@
         // Discard stale responses from previous commit selections
         if (msg.payload.hash !== activeHash) return;
         files = msg.payload.files;
-        diffs = msg.payload.diffs;
+      }
+      if (msg.type === 'fileDiffData') {
+        if (msg.payload.hash !== activeHash) return;
+        if (msg.payload.diff) {
+          // Add or replace the diff for the file
+          diffs = [...diffs.filter(d => d.file !== msg.payload.file), msg.payload.diff];
+        }
       }
       if (msg.type === 'lfsData') {
         lfsFiles = msg.payload.files;

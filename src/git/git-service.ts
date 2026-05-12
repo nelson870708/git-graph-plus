@@ -504,16 +504,24 @@ export class GitService {
     }
   }
 
-  async showCommitDiff(hash: string): Promise<DiffData[]> {
+  async showCommitDiff(hash: string, file?: string): Promise<DiffData[]> {
     this.assertSafeRef(hash, 'show');
     // For merge commits, diff against first parent (hash^1..hash)
     // For regular commits, git show works fine
     try {
-      const raw = await this.exec(['diff', '--no-color', `${hash}^..${hash}`]);
+      const args = ['diff', '--no-color', `${hash}^..${hash}`];
+      if (file) {
+        args.push('--', file);
+      }
+      const raw = await this.exec(args);
       return parseDiff(raw);
     } catch {
       // Fallback for root commits (no parent)
-      const raw = await this.exec(['show', '--no-color', '--format=', hash]);
+      const args = ['show', '--no-color', '--format=', hash];
+      if (file) {
+        args.push('--', file);
+      }
+      const raw = await this.exec(args);
       return parseDiff(raw);
     }
   }

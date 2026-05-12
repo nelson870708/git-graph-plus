@@ -275,13 +275,18 @@ export class MainPanel {
           break;
         }
         case 'getCommitDiff': {
-          const [commitDiffs, commitFiles] = await Promise.all([
-            this.gitService.showCommitDiff(message.payload.hash),
-            this.gitService.showCommitFiles(message.payload.hash),
-          ]);
+          const commitFiles = await this.gitService.showCommitFiles(message.payload.hash);
           this.panel.webview.postMessage({
             type: 'commitDiffData',
-            payload: { hash: message.payload.hash, diffs: commitDiffs, files: commitFiles },
+            payload: { hash: message.payload.hash, files: commitFiles },
+          });
+          break;
+        }
+        case 'getFileDiff': {
+          const diffs = await this.gitService.showCommitDiff(message.payload.hash, message.payload.file);
+          this.panel.webview.postMessage({
+            type: 'fileDiffData',
+            payload: { hash: message.payload.hash, file: message.payload.file, diff: diffs[0] || null },
           });
           break;
         }
