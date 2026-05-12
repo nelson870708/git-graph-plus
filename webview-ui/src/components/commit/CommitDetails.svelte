@@ -3,6 +3,7 @@
   import { getVsCodeApi } from '../../lib/vscode-api';
   import { branchStore } from '../../lib/stores/branches.svelte';
   import { uiStore } from '../../lib/stores/ui.svelte';
+  import { commitStore } from '../../lib/stores/commits.svelte';
   import { onMount } from 'svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { getGravatarUrl } from '../../lib/utils/gravatar';
@@ -10,6 +11,7 @@
 
   import ImageDiff from '../common/ImageDiff.svelte';
   import ContextMenu from '../common/ContextMenu.svelte';
+  import CommitHoverCard from '../common/CommitHoverCard.svelte';
   import { tooltip } from '../../lib/actions/tooltip';
 
   interface Props {
@@ -31,6 +33,12 @@
   let lfsFiles = $state<Array<{ oid: string; path: string }>>([]);
   let lfsLocks = $state<Array<{ path: string; owner: string; id: string }>>([]);
   let fileContextMenu = $state<{ x: number; y: number; items: any[] } | null>(null);
+  let previewCommit = $state<Commit | null>(null);
+  let previewPos = $state<{ x: number; y: number } | null>(null);
+  let hoveredHash = $state<string | null>(null);
+  let previewCache = new Map<string, Commit>();
+  let previewTimeout: ReturnType<typeof setTimeout> | null = null;
+
   let selectedDiff = $derived(diffs.find(d => d.file === selectedFile));
   const lfsFileSet = $derived(new Set(lfsFiles.map(f => f.path)));
   const lfsLockMap = $derived(new Map(lfsLocks.map(l => [l.path, l.owner])));
@@ -67,6 +75,18 @@
         lfsFiles = msg.payload.files;
         lfsLocks = msg.payload.locks;
       }
+      if (msg.type === 'commitData') {
+        const c = msg.payload.commit;
+        previewCache.set(c.hash, c);
+        // Preload avatar immediately
+        const img = new Image();
+        img.src = getGravatarUrl(c.author.email, 32);
+
+        // Only show if still hovering and this is the right hash
+        if (hoveredHash === c.hash && previewPos && !previewCommit) {
+           previewCommit = c;
+        }
+      }
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
@@ -74,6 +94,37 @@
 
   function formatFullDate(dateStr: string): string {
     return new Date(dateStr).toLocaleString();
+  }
+
+  function handleParentMouseEnter(e: MouseEvent, hash: string) {
+    if (previewTimeout) clearTimeout(previewTimeout);
+    
+    const x = e.clientX;
+    const y = e.clientY;
+    hoveredHash = hash;
+
+    previewTimeout = setTimeout(() => {
+      const cached = previewCache.get(hash) || commitStore.getCommit(hash);
+      if (cached) {
+        // Preload avatar
+        const img = new Image();
+        img.src = getGravatarUrl(cached.author.email, 32);
+        
+        previewCommit = cached;
+        previewPos = { x, y };
+      } else {
+        previewPos = { x, y };
+        vscode.postMessage({ type: 'getCommitData', payload: { hash } });
+      }
+    }, 400);
+  }
+
+  function handleParentMouseLeave() {
+    if (previewTimeout) clearTimeout(previewTimeout);
+    previewTimeout = null;
+    previewCommit = null;
+    previewPos = null;
+    hoveredHash = null;
   }
 
   function getFileName(path: string): string {
@@ -325,7 +376,16 @@
               <span class="meta-value mono">
                 {#each commit.parents as parent, i}
                   {#if i > 0}, {/if}
-                  <button class="parent-link" onclick={() => vscode.postMessage({ type: 'searchByHash', payload: { hash: parent } })}>{parent.substring(0, 7)}</button>
+                  <button
+                    class="parent-link"
+                    onmouseenter={(e) => handleParentMouseEnter(e, parent)}
+                    onmouseleave={handleParentMouseLeave}
+                    onclick={() => {
+                      uiStore.selectedCommitHash = parent;
+                      vscode.postMessage({ type: 'searchByHash', payload: { hash: parent } });
+                      handleParentMouseLeave();
+                    }}
+                  >{parent.substring(0, 7)}</button>
                 {/each}
               </span>
             </div>
@@ -543,6 +603,22 @@
     y={fileContextMenu.y}
     items={fileContextMenu.items}
     onClose={() => { fileContextMenu = null; }}
+  />
+{/if}
+
+{#if previewCommit && previewPos}
+  <CommitHoverCard
+    commit={previewCommit}
+    x={previewPos.x}
+    y={previewPos.y}
+    onClose={handleParentMouseLeave}
+    onNavigate={() => {
+      if (previewCommit) {
+        uiStore.selectedCommitHash = previewCommit.hash;
+        vscode.postMessage({ type: 'searchByHash', payload: { hash: previewCommit.hash } });
+        handleParentMouseLeave();
+      }
+    }}
   />
 {/if}
 

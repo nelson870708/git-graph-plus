@@ -653,6 +653,13 @@ export class MainPanel {
           }
           break;
         }
+        case 'getCommitData': {
+          const commit = await this.gitService.searchByHash(message.payload.hash);
+          if (commit) {
+            this.panel.webview.postMessage({ type: 'commitData', payload: { commit } });
+          }
+          break;
+        }
         case 'searchCommits': {
           const results = await this.gitService.searchCommits(message.payload.query, {
             author: message.payload.author,
