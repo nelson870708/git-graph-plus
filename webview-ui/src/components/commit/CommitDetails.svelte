@@ -568,14 +568,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: 1.9em;
+    height: 1.9em;
     background: transparent;
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
     border-radius: 3px;
-    font-size: 1.08em;
+    font-size: 1.25em;
   }
 
   .tab-action-btn:hover {
