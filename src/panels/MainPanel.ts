@@ -1182,7 +1182,7 @@ export class MainPanel {
       const sortOrder = vscode.workspace.getConfiguration('gitGraphPlus').get<'author-date' | 'date' | 'topological'>('graphSortOrder', 'topological');
       const refreshLimit = this.currentLimit || 1000;
       const [allFetched, branches, tags, remotes, stashes, worktrees] = await Promise.all([
-        this.gitService.log({ limit: refreshLimit + 1, sortOrder, remoteFilter: this.currentRemoteFilter }),
+        this.gitService.log({ limit: refreshLimit + 1, sortOrder, remoteFilter: this.currentRemoteFilter, branches: this.currentBranchFilter }),
         this.gitService.branches(),
         this.gitService.tags(),
         this.gitService.remotes(),
@@ -1198,7 +1198,7 @@ export class MainPanel {
       this.panel.webview.postMessage({
         type: 'fullRefresh',
         payload: {
-          logData: { commits: allCommits, hasMore, currentLimit: this.currentLimit, graph, paths: fg.paths, links: fg.links, dots: fg.dots, commitLeftMargin: fg.commitLeftMargin },
+          logData: { commits: allCommits, hasMore, currentLimit: this.currentLimit, graph, paths: fg.paths, links: fg.links, dots: fg.dots, commitLeftMargin: fg.commitLeftMargin, remoteFilter: this.currentRemoteFilter, branches: this.currentBranchFilter },
           branchData: { branches, tags, remotes, stashes, worktrees },
         },
       });

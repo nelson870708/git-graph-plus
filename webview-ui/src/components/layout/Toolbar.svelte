@@ -12,6 +12,11 @@
 
   const vscode = getVsCodeApi();
 
+  interface Props {
+    onRefresh?: () => void;
+  }
+  let { onRefresh = () => {} }: Props = $props();
+
   let showAddRemote = $state(false);
   let showRepoDropdown = $state(false);
   let showFlowDropdown = $state(false);
@@ -21,9 +26,7 @@
 
   function refresh() {
     uiStore.operating = 'refresh';
-    vscode.postMessage({ type: 'getLog', payload: { limit: 1000 } });
-    vscode.postMessage({ type: 'getBranches' });
-    vscode.postMessage({ type: 'getRepoList' });
+    onRefresh();
   }
 
   function switchToGraph() {
