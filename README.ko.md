@@ -159,8 +159,6 @@ VS Code를 위한 모던 Git GUI. 커밋 히스토리를 시각화하고, 브랜
 | 설정                             | 기본값        | 설명                                                  |
 | -------------------------------- | ------------- | ----------------------------------------------------- |
 | `gitGraphPlus.autoRefresh`       | `true`        | 리포지토리 변경 감지 시 자동 새로고침                 |
-| `gitGraphPlus.autoFetch`         | `true`        | 리모트에서 주기적으로 자동 fetch                      |
-| `gitGraphPlus.autoFetchInterval` | `10`          | 자동 fetch 간격 (분, 1–60)                            |
 | `gitGraphPlus.graphSortOrder`    | `topological` | 커밋 정렬 순서 (`topological`, `date`, `author-date`) |
 | `gitGraphPlus.locale`            | `auto`        | UI 언어 (`auto`, `en`, `ko`, `zh-cn`)                 |
 

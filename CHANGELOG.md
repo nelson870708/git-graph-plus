@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.8 (2026-05-13)
+
+### New Features
+- **Resizable File List Panel** - Drag the divider between the file list and diff viewer in the commit details panel to adjust their relative widths (min 120px, max 480px)
+
+### Improvements
+- **Ref Badge Icon Alignment** - Fixed vertical alignment of cloud and tag icons in REFS badges in the commit details panel
+
+### Bug Fixes
+- **Filter Preservation on Refresh** - Branch and author filters are now correctly preserved across both manual and auto refresh
+- **Filter Persistence on Reopen** - Branch and author filters are now correctly restored when the webview panel is closed and reopened
+
 ## 0.3.7 (2026-05-12)
 
 ### New Features

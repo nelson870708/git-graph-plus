@@ -159,8 +159,6 @@ A modern, full-featured Git GUI for VS Code. Visualize your commit history, mana
 | Setting                          | Default       | Description                                              |
 | -------------------------------- | ------------- | -------------------------------------------------------- |
 | `gitGraphPlus.autoRefresh`       | `true`        | Auto-refresh on repository changes                       |
-| `gitGraphPlus.autoFetch`         | `true`        | Periodically fetch from remotes                          |
-| `gitGraphPlus.autoFetchInterval` | `10`          | Auto-fetch interval (minutes, 1–60)                      |
 | `gitGraphPlus.graphSortOrder`    | `topological` | Commit sort order (`topological`, `date`, `author-date`) |
 | `gitGraphPlus.locale`            | `auto`        | UI language (`auto`, `en`, `ko`, `zh-cn`)                |
 
