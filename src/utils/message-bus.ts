@@ -6,7 +6,7 @@ export type WebviewMessage =
   | { type: 'getBranches' }
   | { type: 'getRepoList' }
   | { type: 'checkDirty' }
-  | { type: 'predictConflicts'; payload: { ours: string; theirs: string } }
+  | { type: 'predictConflicts'; payload: { ours: string; theirs: string; mode?: 'rebase'; mergeBase?: string } }
   | { type: 'checkout'; payload: { ref: string; pullAfter?: boolean; force?: boolean; merge?: boolean; stash?: boolean; stashUntracked?: boolean; clean?: boolean } }
   | { type: 'getCommitDiff'; payload: { hash: string } }
   | { type: 'getFileDiff'; payload: { hash: string; file: string } }

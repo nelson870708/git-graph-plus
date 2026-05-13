@@ -23,7 +23,7 @@
   onMount(() => {
     rebaseBtn?.focus();
     const vscode = getVsCodeApi();
-    vscode.postMessage({ type: 'predictConflicts', payload: { ours: branch, theirs: onto } });
+    vscode.postMessage({ type: 'predictConflicts', payload: { ours: branch, theirs: onto, mode: 'rebase' } });
     const handler = (event: MessageEvent) => {
       if (event.data.type === 'conflictPrediction') {
         conflictPrediction = event.data.payload;

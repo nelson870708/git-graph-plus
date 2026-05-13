@@ -296,7 +296,9 @@ export class MainPanel {
           break;
         }
         case 'predictConflicts': {
-          const result = await this.gitService.predictConflicts(message.payload.ours, message.payload.theirs);
+          const result = message.payload.mode === 'rebase'
+            ? await this.gitService.predictRebaseConflicts(message.payload.ours, message.payload.theirs)
+            : await this.gitService.predictConflicts(message.payload.ours, message.payload.theirs, message.payload.mergeBase);
           this.panel.webview.postMessage({ type: 'conflictPrediction', payload: result });
           break;
         }

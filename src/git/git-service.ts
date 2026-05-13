@@ -417,21 +417,26 @@ export class GitService {
     await this.exec(['branch', '-m', oldName, newName]);
   }
 
-  async predictConflicts(ours: string, theirs: string): Promise<{ hasConflict: boolean; files: string[] }> {
-    this.assertSafeRef(ours, 'merge-tree');
-    this.assertSafeRef(theirs, 'merge-tree');
+  private mergeTreeCheck(ours: string, theirs: string, mergeBase?: string): Promise<{ hasConflict: boolean; files: string[] }> {
+    const args = mergeBase
+      ? ['merge-tree', '--write-tree', `--merge-base=${mergeBase}`, ours, theirs]
+      : ['merge-tree', '--write-tree', ours, theirs];
     return new Promise((resolve) => {
-      const proc = spawn('git', ['merge-tree', '--write-tree', ours, theirs], {
+      const proc = spawn('git', args, {
         cwd: this.repoPath,
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' },
       });
       const timer = setTimeout(() => { proc.kill('SIGTERM'); resolve({ hasConflict: false, files: [] }); }, 15000);
       let stdout = '';
+      let stderr = '';
       proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+      proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
       proc.on('close', (code) => {
         clearTimeout(timer);
         if (code === 0) {
           resolve({ hasConflict: false, files: [] });
+        } else if (stderr.includes('unknown option') || stderr.includes('unrecognized argument')) {
+          resolve(null as unknown as { hasConflict: boolean; files: string[] });
         } else {
           const files = stdout.split('\n')
             .filter(l => l.startsWith('CONFLICT'))
@@ -442,6 +447,68 @@ export class GitService {
       });
       proc.on('error', () => { clearTimeout(timer); resolve({ hasConflict: false, files: [] }); });
     });
+  }
+
+  async predictConflicts(ours: string, theirs: string, mergeBase?: string): Promise<{ hasConflict: boolean; files: string[] }> {
+    this.assertSafeRef(ours, 'merge-tree');
+    this.assertSafeRef(theirs, 'merge-tree');
+    if (mergeBase) this.assertSafeRef(mergeBase, 'merge-tree');
+
+    if (mergeBase && this.mergeBaseSupported !== false) {
+      const result = await this.mergeTreeCheck(ours, theirs, mergeBase);
+      if (result !== null) {
+        this.mergeBaseSupported = true;
+        return result;
+      }
+      this.mergeBaseSupported = false;
+    }
+    return this.mergeTreeCheck(ours, theirs);
+  }
+
+  private mergeBaseSupported: boolean | null = null;
+
+  async predictRebaseConflicts(branch: string, onto: string): Promise<{ hasConflict: boolean; files: string[] }> {
+    this.assertSafeRef(branch, 'merge-tree');
+    this.assertSafeRef(onto, 'merge-tree');
+
+    let mergeBase: string;
+    try {
+      mergeBase = (await this.exec(['merge-base', onto, branch], { silent: true })).trim();
+    } catch {
+      return this.mergeTreeCheck(onto, branch);
+    }
+
+    let commitList: string[];
+    try {
+      commitList = (await this.exec(['log', '--format=%H', '--reverse', `${mergeBase}..${branch}`], { silent: true }))
+        .split('\n').filter(Boolean);
+    } catch {
+      return this.mergeTreeCheck(onto, branch);
+    }
+
+    if (commitList.length === 0) return { hasConflict: false, files: [] };
+
+    const commits = commitList.slice(0, 20);
+    const conflictFiles = new Set<string>();
+
+    for (const commit of commits) {
+      // Try per-commit check (git 2.40+): use C^ as merge base to isolate only this commit's diff
+      if (this.mergeBaseSupported !== false) {
+        const result = await this.mergeTreeCheck(onto, commit, `${commit}^`);
+        if (result === null) {
+          this.mergeBaseSupported = false;
+        } else {
+          this.mergeBaseSupported = true;
+          if (result.hasConflict) result.files.forEach(f => conflictFiles.add(f));
+          continue;
+        }
+      }
+      // Fallback: cumulative diff from merge base
+      const result = await this.mergeTreeCheck(onto, commit);
+      if (result.hasConflict) result.files.forEach(f => conflictFiles.add(f));
+    }
+
+    return { hasConflict: conflictFiles.size > 0, files: [...conflictFiles] };
   }
 
   async merge(branch: string, options?: { noFf?: boolean; ffOnly?: boolean; squash?: boolean }): Promise<void> {

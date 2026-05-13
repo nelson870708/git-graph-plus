@@ -20,7 +20,7 @@
   onMount(() => {
     revertBtn?.focus();
     const vscode = getVsCodeApi();
-    vscode.postMessage({ type: 'predictConflicts', payload: { ours: 'HEAD', theirs: commit + '^' } });
+    vscode.postMessage({ type: 'predictConflicts', payload: { ours: 'HEAD', theirs: commit + '^', mergeBase: commit } });
     const handler = (event: MessageEvent) => {
       if (event.data.type === 'conflictPrediction') {
         conflictPrediction = event.data.payload;
