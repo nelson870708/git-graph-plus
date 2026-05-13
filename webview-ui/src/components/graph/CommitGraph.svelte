@@ -1172,10 +1172,7 @@
         const remote = fastForwardRemote;
         const dp = { ...pendingCheckoutDirtyPayload };
         pendingCheckoutDirtyPayload = {};
-        doCheckout(local, false, dp, true);
-        setTimeout(() => {
-          vscode.postMessage({ type: 'merge', payload: { branch: remote, ffOnly: true } });
-        }, 500);
+        vscode.postMessage({ type: 'fastForward', payload: { local, remote, ...dp } });
       }}>{t('fastForward.title')}</button>
     </div>
   </Modal>

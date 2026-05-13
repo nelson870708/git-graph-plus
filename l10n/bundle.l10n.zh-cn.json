@@ -73,6 +73,7 @@
   "branchDeleted": "分支 '{0}' 已删除",
   "branchRenamed": "分支已重命名为 '{0}'",
   "merged": "已合并 '{0}'",
+  "fastForwarded": "已将 '{0}' fast-forward 至 '{1}'",
   "fetched": "抓取完成",
   "pulled": "拉取完成",
   "pushed": "推送完成",

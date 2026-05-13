@@ -414,6 +414,33 @@ export class MainPanel {
           await this.refreshAll();
           break;
         }
+        case 'fastForward': {
+          if (message.payload.stash) {
+            await this.gitService.stashSave('Auto-stash before checkout', message.payload.stashUntracked);
+          }
+          if (message.payload.clean) {
+            await this.gitService.clean();
+          }
+          try {
+            await this.gitService.checkout(message.payload.local, {});
+            await this.gitService.merge(message.payload.remote, { ffOnly: true });
+          } finally {
+            if (message.payload.stash) {
+              try {
+                await this.gitService.stashPop(0);
+              } catch {
+                this.panel.webview.postMessage({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
+              }
+            }
+          }
+          this.panel.webview.postMessage({
+            type: 'operationComplete',
+            payload: { operation: 'checkout', success: true },
+          });
+          vscode.window.showInformationMessage(vscode.l10n.t('fastForwarded', message.payload.local, message.payload.remote));
+          await this.refreshAll();
+          break;
+        }
         case 'merge': {
           await this.gitService.merge(message.payload.branch, { noFf: message.payload.noFf, ffOnly: message.payload.ffOnly, squash: message.payload.squash });
           this.panel.webview.postMessage({

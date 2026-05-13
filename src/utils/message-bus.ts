@@ -16,6 +16,7 @@ export type WebviewMessage =
   | { type: 'deleteRemoteBranch'; payload: { remote: string; name: string } }
   | { type: 'renameBranch'; payload: { oldName: string; newName: string } }
   | { type: 'merge'; payload: { branch: string; noFf?: boolean; ffOnly?: boolean; squash?: boolean } }
+  | { type: 'fastForward'; payload: { local: string; remote: string; stash?: boolean; stashUntracked?: boolean; clean?: boolean } }
   | { type: 'abortMerge' }
   | { type: 'rebase'; payload: { onto: string; autostash?: boolean } }
   | { type: 'abortRebase' }

@@ -73,6 +73,7 @@
   "branchDeleted": "브랜치 '{0}'이(가) 삭제되었습니다",
   "branchRenamed": "브랜치 이름이 '{0}'으(로) 변경되었습니다",
   "merged": "'{0}'이(가) merge 되었습니다",
+  "fastForwarded": "'{0}'을(를) '{1}'로 fast-forward 완료",
   "fetched": "Fetch 완료",
   "pulled": "Pull 완료",
   "pushed": "Push 완료",

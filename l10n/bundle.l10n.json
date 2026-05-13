@@ -73,6 +73,7 @@
   "branchDeleted": "Branch '{0}' deleted",
   "branchRenamed": "Branch renamed to '{0}'",
   "merged": "Merged '{0}'",
+  "fastForwarded": "Fast-forwarded '{0}' to '{1}'",
   "fetched": "Fetch complete",
   "pulled": "Pull complete",
   "pushed": "Push complete",
