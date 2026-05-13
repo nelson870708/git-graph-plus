@@ -4,7 +4,7 @@
   import { branchStore } from '../../lib/stores/branches.svelte';
   import { uiStore } from '../../lib/stores/ui.svelte';
   import { commitStore } from '../../lib/stores/commits.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { getGravatarUrl } from '../../lib/utils/gravatar';
   import { detectLanguage, highlightLine, escapeHtml } from '../../lib/utils/highlighter';
@@ -43,10 +43,46 @@
   const lfsFileSet = $derived(new Set(lfsFiles.map(f => f.path)));
   const lfsLockMap = $derived(new Map(lfsLocks.map(l => [l.path, l.owner])));
   let diffMode = $state<'inline' | 'side-by-side'>('inline');
+  let filesPanelWidth = $state(240);
+  let isResizing = $state(false);
+  let resizeStartX = 0;
+  let resizeStartWidth = 0;
   // svelte-ignore state_referenced_locally
   let activeTab = $state<'commit' | 'changes'>(commit ? 'commit' : 'changes');
 
   let activeHash = '';
+
+  function startResize(e: MouseEvent) {
+    isResizing = true;
+    resizeStartX = e.clientX;
+    resizeStartWidth = filesPanelWidth;
+    document.addEventListener('mousemove', onResizeMove);
+    document.addEventListener('mouseup', stopResize);
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+  }
+
+  function onResizeMove(e: MouseEvent) {
+    if (!isResizing) return;
+    const delta = e.clientX - resizeStartX;
+    filesPanelWidth = Math.min(480, Math.max(120, resizeStartWidth + delta));
+  }
+
+  function stopResize() {
+    if (!isResizing) return;
+    isResizing = false;
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', stopResize);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  }
+
+  onDestroy(() => {
+    document.removeEventListener('mousemove', onResizeMove);
+    document.removeEventListener('mouseup', stopResize);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  });
 
   // Request commit diff only when hash actually changes (not on object reference changes from fullRefresh)
   $effect(() => {
@@ -453,7 +489,7 @@
   <!-- Changes tab -->
   {:else if activeTab === 'changes'}
     <div class="changes-tab-content">
-      <div class="files-panel">
+      <div class="files-panel" style="width: {filesPanelWidth}px">
         <div class="files-list">
           {#snippet renderTree(nodes: FileTreeNode[], depth: number)}
             {#each nodes as node}
@@ -557,6 +593,12 @@
           {@render renderTree(fileTree, 0)}
         </div>
       </div>
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="resize-handle"
+        class:resizing={isResizing}
+        onmousedown={startResize}
+      ></div>
 
       {#if selectedDiff}
         <div class="diff-wrapper">
@@ -950,6 +992,7 @@
     font-size: 1em;
     flex-shrink: 0;
     line-height: 1;
+    transform: translateY(1px);
   }
 
   /* ── Message ── */
@@ -989,12 +1032,24 @@
   }
 
   .files-panel {
-    width: 240px;
     flex-shrink: 0;
-    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  .resize-handle {
+    width: 4px;
+    flex-shrink: 0;
+    cursor: col-resize;
+    background: transparent;
+    border-right: 1px solid var(--border-color);
+    transition: background 0.15s;
+  }
+
+  .resize-handle:hover,
+  .resize-handle.resizing {
+    background: var(--vscode-sash-hoverBorder, rgba(128, 128, 128, 0.4));
   }
 
   .files-list {
