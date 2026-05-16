@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.10 (2026-05-17)
+
+### New Features
+- **Uncommitted Changes Node** - Shows pending uncommitted changes as a virtual node at the top of the commit graph; click to view staged and unstaged diffs in the details panel
+- **Copy Short SHA** - New "Copy Short SHA" context menu item on the commit graph
+
+### Improvements
+- **Operation Notifications** - Added completion notifications for Delete Remote Branch, Add/Remove Remote, Drop Stash, and Add/Remove Worktree
+- **Short SHA in Messages** - Notification messages for rebase, reset, and detached HEAD checkout now show the short (7-char) SHA
+
+### Performance
+- **Graph Traversal Speed** - Replaced O(n²) BFS queue with an O(n) index-pointer approach in hot paths, significantly improving rendering on large repositories
+- **Diff Syntax Highlighting** - Switched to synchronous highlighting after init, capped at 5,000 lines, and guarded against stale renders when the selected diff changes mid-render
+- **Repo Discovery Timeout** - Added 15-second timeout guard to prevent hangs during repository discovery on slow disks
+
+### Bug Fixes
+- **Branch Selection Modal** - Fixed missing modal when double-clicking a commit shared by multiple local branches; now shows a dropdown to select the target branch
+
 ## 0.3.9 (2026-05-13)
 
 ### Bug Fixes

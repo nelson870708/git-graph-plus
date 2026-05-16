@@ -38,6 +38,7 @@ A modern, full-featured Git GUI for VS Code. Visualize your commit history, mana
 | **Commit Comparison**   | Select a base commit, then click another to compare - or compare any commit to your working tree                      |
 | **Search**              | Find commits by message, author, date range, hash, or changed file - with result highlighting and keyboard navigation |
 | **Branch Filter**       | Filter the commit graph to show only commits reachable from a selected branch                                         |
+| **Uncommitted Changes** | Shows pending uncommitted changes as a virtual node at the top of the graph, with full diff in the commit details panel |
 | **Push Status**         | Blue dot for local-only commits (not pushed), gray dot for remote-only commits (remote ahead)                         |
 | **Avatars**             | Gravatar avatars displayed next to author names                                                                       |
 | **Themes**              | Full support for light, dark, and high-contrast VS Code themes                                                        |
