@@ -134,6 +134,7 @@ export const en: Record<string, string> = {
   'graph.revertCommit': 'Revert Commit',
   'graph.savePatch': 'Save as Patch',
   'graph.compareToLocal': 'Compare to Local Changes',
+  'graph.copyShortSHA': 'Copy Short SHA',
   'graph.copySHA': 'Copy Commit SHA',
   'graph.copyCommitInfo': 'Copy Commit Info',
   'graph.copyBranchName': 'Copy Branch Name',

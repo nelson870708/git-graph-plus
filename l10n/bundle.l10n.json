@@ -83,6 +83,11 @@
   "resetComplete": "Reset to {0}",
   "stashApplied": "Stash applied",
   "stashPopped": "Stash popped",
+  "stashDropped": "Stash dropped",
   "tagCreated": "Tag '{0}' created",
-  "tagDeleted": "Tag '{0}' deleted"
+  "tagDeleted": "Tag '{0}' deleted",
+  "remoteBranchDeleted": "Remote branch '{0}/{1}' deleted",
+  "remoteAdded": "Remote '{0}' added",
+  "remoteRemoved": "Remote '{0}' removed",
+  "worktreeRemoved": "Worktree removed"
 }

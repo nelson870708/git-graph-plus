@@ -83,6 +83,11 @@
   "resetComplete": "已重置到 {0}",
   "stashApplied": "储藏已应用",
   "stashPopped": "储藏已应用并删除",
+  "stashDropped": "储藏已删除",
   "tagCreated": "标签 '{0}' 已创建",
-  "tagDeleted": "标签 '{0}' 已删除"
+  "tagDeleted": "标签 '{0}' 已删除",
+  "remoteBranchDeleted": "远程分支 '{0}/{1}' 已删除",
+  "remoteAdded": "远程 '{0}' 已添加",
+  "remoteRemoved": "远程 '{0}' 已移除",
+  "worktreeRemoved": "工作树已移除"
 }

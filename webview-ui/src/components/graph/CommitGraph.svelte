@@ -722,6 +722,7 @@
 
     // ── Copy ──
     groups.push([
+      { label: t('graph.copyShortSHA'), action: () => vscode.postMessage({ type: 'copyToClipboard', payload: { text: commit.abbreviatedHash } }) },
       { label: t('graph.copySHA'), action: () => vscode.postMessage({ type: 'copyToClipboard', payload: { text: commit.hash } }) },
       { label: t('graph.copyCommitInfo'), action: () => vscode.postMessage({ type: 'copyToClipboard', payload: { text: `${commit.abbreviatedHash} - ${commit.subject}` } }) },
     ]);

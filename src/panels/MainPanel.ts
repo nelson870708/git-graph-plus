@@ -327,7 +327,8 @@ export class MainPanel {
             type: 'operationComplete',
             payload: { operation: 'checkout', success: true },
           });
-          vscode.window.showInformationMessage(vscode.l10n.t('checkedOut', message.payload.ref));
+          const checkedOutRef = /^[0-9a-f]{40}$/i.test(message.payload.ref) ? message.payload.ref.substring(0, 7) : message.payload.ref;
+          vscode.window.showInformationMessage(vscode.l10n.t('checkedOut', checkedOutRef));
           await this.refreshAll();
           break;
         }
@@ -397,6 +398,7 @@ export class MainPanel {
             type: 'operationComplete',
             payload: { operation: 'deleteRemoteBranch', success: true },
           });
+          vscode.window.showInformationMessage(vscode.l10n.t('remoteBranchDeleted', message.payload.remote, message.payload.name));
           await this.refreshAll();
           break;
         }
@@ -528,6 +530,7 @@ export class MainPanel {
             type: 'operationComplete',
             payload: { operation: 'addRemote', success: true },
           });
+          vscode.window.showInformationMessage(vscode.l10n.t('remoteAdded', message.payload.name));
           await this.refreshAll();
           break;
         }
@@ -537,6 +540,7 @@ export class MainPanel {
             type: 'operationComplete',
             payload: { operation: 'removeRemote', success: true },
           });
+          vscode.window.showInformationMessage(vscode.l10n.t('remoteRemoved', message.payload.name));
           await this.refreshAll();
           break;
         }
@@ -546,7 +550,7 @@ export class MainPanel {
             type: 'operationComplete',
             payload: { operation: 'rebase', success: true },
           });
-          vscode.window.showInformationMessage(vscode.l10n.t('rebased', message.payload.onto));
+          vscode.window.showInformationMessage(vscode.l10n.t('rebased', message.payload.onto.substring(0, 7)));
           await this.refreshAll();
           break;
         }
@@ -588,7 +592,7 @@ export class MainPanel {
         case 'reset': {
           await this.gitService.reset(message.payload.ref, message.payload.mode);
           this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'reset', success: true } });
-          vscode.window.showInformationMessage(vscode.l10n.t('resetComplete', message.payload.ref));
+          vscode.window.showInformationMessage(vscode.l10n.t('resetComplete', message.payload.ref.substring(0, 7)));
           await this.refreshAll();
           break;
         }
@@ -619,6 +623,7 @@ export class MainPanel {
         case 'stashDrop': {
           await this.gitService.stashDrop(message.payload.index);
           this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'stashDrop', success: true } });
+          vscode.window.showInformationMessage(vscode.l10n.t('stashDropped'));
           await this.refreshAll();
           break;
         }
@@ -632,8 +637,8 @@ export class MainPanel {
           const wtPath = message.payload.path.replace(/^~/, homeDir);
           await this.gitService.worktreeAdd(wtPath, message.payload.branch, message.payload.newBranch);
           this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'worktreeAdd', success: true } });
+          vscode.window.showInformationMessage(vscode.l10n.t('worktreeAdded', message.payload.path));
           await this.refreshAll();
-          // Also refresh worktrees view in activity bar
           break;
         }
         case 'worktreeRemove': {
@@ -643,6 +648,7 @@ export class MainPanel {
             await this.gitService.deleteBranch(message.payload.deleteBranch, true);
           }
           this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'worktreeRemove', success: true } });
+          vscode.window.showInformationMessage(vscode.l10n.t('worktreeRemoved'));
           await this.refreshAll();
           break;
         }
