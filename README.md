@@ -115,13 +115,13 @@ A modern, full-featured Git GUI for VS Code. Visualize your commit history, mana
 
 ![Reflog](resources/reflog.png)
 
-| Feature        | Description                                                                                        |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| **Git Flow**   | Initialize and manage feature, release, and hotfix branches                                        |
-| **Git Bisect** | Visual bisect UI - start, mark good/bad, and reset                                                 |
-| **Git LFS**    | View LFS-tracked files and manage file locks                                                       |
-| **Submodules** | View status, update submodules, and switch graph to submodule repos                                |
-| **Statistics** | Commits by author (with Gravatar), activity heatmap                                                |
+| Feature        | Description                                                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Git Flow**   | Initialize and manage feature, release, and hotfix branches                                                                                                                                  |
+| **Git Bisect** | Visual bisect UI - start, mark good/bad, and reset                                                                                                                                           |
+| **Git LFS**    | View LFS-tracked files and manage file locks                                                                                                                                                 |
+| **Submodules** | View status, update submodules, and switch graph to submodule repos                                                                                                                          |
+| **Statistics** | Commits by author (with Gravatar), activity heatmap                                                                                                                                          |
 | **Reflog**     | Browse the full git reference log with semantic color-coded sub-actions (amend, squash, etc.), search, action filters, and per-branch view. Includes dangling commit detection and recovery. |
 
 ### Multi-Repository & Submodules
@@ -152,15 +152,20 @@ A modern, full-featured Git GUI for VS Code. Visualize your commit history, mana
    - **Activity Bar** - Click the Git Graph+ icon
    - **SCM title bar**, **Status bar**, or **Editor title bar** - Click the git-merge icon
 
+> [!Tip]
+> For the best experience, enable these VS Code settings:
+> - `git.autofetch: true` - keeps the graph up to date by periodically fetching from all remotes
+> - `git.fetchPrune: true` - removes stale remote-tracking branches on each fetch
+
 ---
 
 ## Settings
 
-| Setting                          | Default       | Description                                              |
-| -------------------------------- | ------------- | -------------------------------------------------------- |
-| `gitGraphPlus.autoRefresh`       | `true`        | Auto-refresh on repository changes                       |
-| `gitGraphPlus.graphSortOrder`    | `topological` | Commit sort order (`topological`, `date`, `author-date`) |
-| `gitGraphPlus.locale`            | `auto`        | UI language (`auto`, `en`, `ko`, `zh-cn`)                |
+| Setting                       | Default       | Description                                              |
+| ----------------------------- | ------------- | -------------------------------------------------------- |
+| `gitGraphPlus.autoRefresh`    | `true`        | Auto-refresh on repository changes                       |
+| `gitGraphPlus.graphSortOrder` | `topological` | Commit sort order (`topological`, `date`, `author-date`) |
+| `gitGraphPlus.locale`         | `auto`        | UI language (`auto`, `en`, `ko`, `zh-cn`)                |
 
 ---
 
