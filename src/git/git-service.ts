@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { parseLog, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks } from './git-parser';
 import type { Commit, BranchInfo, TagInfo, RemoteInfo, StashEntry, LogOptions, DiffData, WorktreeInfo } from './types';
 
@@ -500,6 +501,7 @@ export class GitService {
   }
 
   async getUncommittedFileDiff(file: string, staged: boolean): Promise<DiffData | null> {
+    this.assertSafePath(file, 'diff');
     if (staged) {
       const raw = await this.exec(['diff', '--no-color', '--cached', '--', file]).catch(() => '');
       return parseDiff(raw, file)[0] ?? null;
@@ -813,9 +815,37 @@ export class GitService {
 
   async addRemote(name: string, url: string): Promise<void> {
     this.assertSafeRef(name, 'remote add');
-    this.assertSafeRef(url, 'remote add');
+    this.assertSafeRemoteUrl(url);
     await this.exec(['remote', 'add', name, url]);
     this.cachedRemoteNames = null;
+  }
+
+  /** Allow only well-known git transports. file:// is rejected because a
+   *  malicious value could point at arbitrary local paths; users who really
+   *  need it can configure it via `git remote add` directly. */
+  private assertSafeRemoteUrl(url: string): void {
+    if (typeof url !== 'string' || url.length === 0) {
+      throw new GitError('Invalid remote URL', null, []);
+    }
+    if (url.startsWith('-')) {
+      throw new GitError(`Remote URL must not start with '-': ${url}`, null, []);
+    }
+    // eslint-disable-next-line no-control-regex
+    if (/[\x00-\x1f\x7f]/.test(url)) {
+      throw new GitError('Remote URL contains control characters', null, []);
+    }
+    // SSH shorthand: user@host:path (no scheme). Match before scheme parsing.
+    const isSshShorthand = /^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+:/.test(url);
+    if (isSshShorthand) return;
+    // Scheme-based URLs.
+    const m = url.match(/^([a-z][a-z0-9+.-]*):\/\//i);
+    if (!m) {
+      throw new GitError(`Unsupported remote URL: ${url}`, null, []);
+    }
+    const allowed = new Set(['http', 'https', 'git', 'ssh', 'git+ssh', 'git+https']);
+    if (!allowed.has(m[1].toLowerCase())) {
+      throw new GitError(`Unsupported remote URL scheme: ${m[1]}`, null, []);
+    }
   }
 
   async getRemoteUrl(remote: string): Promise<string> {
@@ -957,12 +987,15 @@ export class GitService {
     }
 
     const todoContent = lines.join('\n') + '\n';
-    const todoFile = join(this.repoPath, '.git', `ghg-rebase-todo-${Date.now()}`);
+    const todoFile = join(this.repoPath, '.git', `ghg-rebase-todo-${randomUUID()}`);
 
     try {
       await writeFile(todoFile, todoContent, 'utf-8');
 
-      // Use cp command to copy the temp file as the sequence editor
+      // Use cp/copy to overlay the rebase-todo with our prebuilt one. The path
+      // is passed via env var rather than spliced into the command string so
+      // that cmd.exe / sh expansion handles repo paths containing &, |, (, ),
+      // ^, etc. safely without manual escaping.
       await new Promise<void>((resolve, reject) => {
         const proc = spawn('git', ['rebase', '-i', base], {
           cwd: this.repoPath,
@@ -973,9 +1006,10 @@ export class GitService {
             GIT_MERGE_AUTOEDIT: 'no',
             GIT_EDITOR: 'true',
             EDITOR: 'true',
+            GHG_TODO_FILE: todoFile,
             GIT_SEQUENCE_EDITOR: process.platform === 'win32'
-              ? `copy "${todoFile.replace(/"/g, '""')}"`
-              : `cp ${this.shellEscapeForExec(todoFile)}`,
+              ? `copy /Y "%GHG_TODO_FILE%"`
+              : `cp -- "$GHG_TODO_FILE"`,
           },
         });
 
@@ -1029,7 +1063,8 @@ export class GitService {
   }
 
   async stageFile(filePath: string): Promise<void> {
-    await this.exec(['add', filePath]);
+    this.assertSafePath(filePath, 'add');
+    await this.exec(['add', '--', filePath]);
   }
 
   async getConflictFiles(): Promise<string[]> {
@@ -1167,6 +1202,20 @@ export class GitService {
   // --- Phase 6: Search, Commit Template ---
 
   async searchCommits(query: string, options?: { author?: string; after?: string; before?: string; limit?: number }): Promise<Commit[]> {
+    // Defense-in-depth: reject control characters that could inject extra git
+    // arguments. spawn() with explicit argv already prevents shell injection,
+    // but a newline inside --grep=... lets a single user value carry multiple
+    // tokens once git's own argv parser splits on whitespace in some configs.
+    const reject = (v: string) => { throw new GitError(`Invalid search input: ${v}`, null, ['log']); };
+    // Reject ASCII control chars (newline, CR, NUL, etc.). Spaces and printable
+    // punctuation are legitimate in user queries.
+    // eslint-disable-next-line no-control-regex
+    const hasControl = (v: string) => /[\x00-\x1f\x7f]/.test(v);
+    if (query && hasControl(query)) reject(query);
+    if (options?.author && hasControl(options.author)) reject(options.author);
+    if (options?.after && hasControl(options.after)) reject(options.after);
+    if (options?.before && hasControl(options.before)) reject(options.before);
+
     const args = [
       'log',
       '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
@@ -1278,11 +1327,36 @@ export class GitService {
 
   // --- Git LFS ---
 
+  /** True for LFS errors that are expected configuration limits (file:// or ssh:
+   *  remote with no lock server, no remote configured, etc.) rather than real
+   *  failures the user should be alerted about. */
+  private isExpectedLfsFailure(stderr: string): boolean {
+    const s = stderr.toLowerCase();
+    return (
+      s.includes('missing protocol') ||                  // file:// / unsupported remote
+      s.includes('standalone transfer agent') ||          // file:// fallback hint
+      s.includes('no such remote') ||
+      s.includes("'origin' does not appear to be a git repository") ||
+      s.includes('lfs.url') ||                            // unconfigured lock server
+      s.includes('this operation requires existing locks') ||
+      s.includes('not a git repository')
+    );
+  }
+
   async lfsLsFiles(): Promise<Array<{ oid: string; path: string }>> {
     try {
       const raw = await this.exec(['lfs', 'ls-files']);
       return parseLfsFiles(raw);
-    } catch (err) { console.warn('Git Graph+: LFS ls-files failed:', err instanceof Error ? err.message : err); return []; }
+    } catch (err) {
+      // Stay silent when git-lfs is just not installed (exitCode null = spawn
+      // ENOENT) or when the failure is a known configuration limit. Only
+      // surface unexpected failures so the warning channel stays signal.
+      if (err instanceof GitError && err.exitCode !== null && !this.isExpectedLfsFailure(err.stderr)) {
+        this.warn(`LFS ls-files failed: ${err.stderr || err.message}`);
+      }
+      console.warn('Git Graph+: LFS ls-files failed:', err instanceof Error ? err.message : err);
+      return [];
+    }
   }
 
   async lfsLock(file: string): Promise<string> {
@@ -1299,7 +1373,13 @@ export class GitService {
     try {
       const raw = await this.exec(['lfs', 'locks']);
       return parseLfsLocks(raw);
-    } catch (err) { console.warn('Git Graph+: LFS locks failed:', err instanceof Error ? err.message : err); return []; }
+    } catch (err) {
+      if (err instanceof GitError && err.exitCode !== null && !this.isExpectedLfsFailure(err.stderr)) {
+        this.warn(`LFS locks failed: ${err.stderr || err.message}`);
+      }
+      console.warn('Git Graph+: LFS locks failed:', err instanceof Error ? err.message : err);
+      return [];
+    }
   }
 
   // --- File tree at commit ---
@@ -1307,7 +1387,10 @@ export class GitService {
   async lsTree(ref: string, path?: string): Promise<Array<{ mode: string; type: 'blob' | 'tree'; hash: string; name: string }>> {
     this.assertSafeRef(ref, 'ls-tree');
     const args = ['ls-tree', ref];
-    if (path) { args.push(path); }
+    if (path) {
+      this.assertSafePath(path, 'ls-tree');
+      args.push('--', path);
+    }
     const raw = await this.exec(args);
     if (!raw.trim()) { return []; }
     return raw.trim().split('\n').filter(Boolean).map(line => {

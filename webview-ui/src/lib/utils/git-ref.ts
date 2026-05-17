@@ -11,14 +11,23 @@
  *  - Cannot start with `-` or `.`, cannot end with `.` or `/`
  *  - Cannot end with `.lock`
  *  - Cannot be exactly `@`
+ *  - Per slash-separated component: non-empty, cannot start with `.`, cannot end with `.lock`
  */
 export function validateGitRefName(name: string): string | null {
   if (!name || name.length === 0) { return 'gitRef.empty'; }
   if (name === '@') { return 'gitRef.atOnly'; }
+  // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1f\x7f\s]/.test(name)) { return 'gitRef.whitespaceOrControl'; }
   if (/[\^~:?*\[\\]/.test(name)) { return 'gitRef.forbiddenChars'; }
   if (name.includes('..') || name.includes('@{')) { return 'gitRef.forbiddenSequence'; }
   if (name.startsWith('-') || name.startsWith('.') || name.startsWith('/')) { return 'gitRef.badStart'; }
   if (name.endsWith('.') || name.endsWith('/') || name.endsWith('.lock')) { return 'gitRef.badEnd'; }
+  // Per-component checks: git rejects empty components (//), component starting
+  // with `.` (foo/.bar) or ending with .lock (foo.lock/bar).
+  for (const part of name.split('/')) {
+    if (part.length === 0) { return 'gitRef.badEnd'; }
+    if (part.startsWith('.')) { return 'gitRef.badStart'; }
+    if (part.endsWith('.lock')) { return 'gitRef.badEnd'; }
+  }
   return null;
 }

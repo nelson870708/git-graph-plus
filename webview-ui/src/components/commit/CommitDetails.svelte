@@ -38,7 +38,22 @@
   let previewCommit = $state<Commit | null>(null);
   let previewPos = $state<{ x: number; y: number } | null>(null);
   let hoveredHash = $state<string | null>(null);
-  let previewCache = new Map<string, Commit>();
+  // Bounded LRU so hover previews over many commits don't grow the cache without limit.
+  const PREVIEW_CACHE_MAX = 100;
+  const previewCache = new Map<string, Commit>();
+  function previewCacheSet(hash: string, c: Commit) {
+    if (previewCache.has(hash)) previewCache.delete(hash); // re-insert to move to MRU end
+    previewCache.set(hash, c);
+    if (previewCache.size > PREVIEW_CACHE_MAX) {
+      const oldest = previewCache.keys().next().value;
+      if (oldest !== undefined) previewCache.delete(oldest);
+    }
+  }
+  function previewCacheGet(hash: string): Commit | undefined {
+    const c = previewCache.get(hash);
+    if (c) { previewCache.delete(hash); previewCache.set(hash, c); } // bump to MRU
+    return c;
+  }
   let previewTimeout: ReturnType<typeof setTimeout> | null = null;
 
   const lfsFileSet = $derived(new Set(lfsFiles.map(f => f.path)));
@@ -136,6 +151,9 @@
     function handleMessage(event: MessageEvent) {
       const msg = event.data;
       if (msg.type === 'uncommittedDiffData') {
+        // Discard stale responses that arrive after the user has navigated to a
+        // real commit — the data is only meaningful while viewing UNCOMMITTED.
+        if (activeHash !== 'UNCOMMITTED') return;
         uncommittedFiles = msg.payload;
         if (selectedFile) {
           const isStaged = selectedFile.startsWith('staged:');
@@ -180,7 +198,7 @@
       }
       if (msg.type === 'commitData') {
         const c = msg.payload.commit;
-        previewCache.set(c.hash, c);
+        previewCacheSet(c.hash, c);
         // Preload avatar immediately
         const img = new Image();
         img.src = getGravatarUrl(c.author.email, 32);
@@ -207,7 +225,7 @@
     hoveredHash = hash;
 
     previewTimeout = setTimeout(() => {
-      const cached = previewCache.get(hash) || commitStore.getCommit(hash);
+      const cached = previewCacheGet(hash) || commitStore.getCommit(hash);
       if (cached) {
         // Preload avatar
         const img = new Image();

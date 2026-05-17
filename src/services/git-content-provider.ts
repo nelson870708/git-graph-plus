@@ -44,15 +44,15 @@ export class GitContentProvider implements vscode.TextDocumentContentProvider {
           // File might not exist in this ref (new/deleted file)
           // Return a comment so the user sees something meaningful
           if (stderr.includes('does not exist') || stderr.includes('bad revision') || stderr.includes('fatal:')) {
-            resolve(`// File does not exist at ${ref}`);
+            resolve(`// File does not exist at ${ref}: ${filePath}`);
           } else {
-            resolve('');
+            resolve(`// git show ${ref}:${filePath} failed (exit ${code}): ${stderr.trim()}`);
           }
         }
       });
 
       proc.on('error', (err) => {
-        resolve(`// Error: ${err.message}`);
+        resolve(`// git show ${ref}:${filePath} failed: ${err.message}`);
       });
     });
   }

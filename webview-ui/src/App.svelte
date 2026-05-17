@@ -107,6 +107,9 @@
         case 'error':
           uiStore.setError(msg.payload.message);
           commitStore.setLoading(false);
+          // Close any open modal — the operation that opened it has failed and
+          // leaving the modal up would imply it is still pending.
+          modalStore.closeAll();
           break;
         case 'flowStatus':
           flowConfig = msg.payload.config;
@@ -319,15 +322,15 @@
         <div class="conflict-info">
           <i class="codicon codicon-warning conflict-icon"></i>
           <span class="conflict-title">
-            <strong>{{ merge: 'Merge', rebase: 'Rebase', revert: 'Revert', cherryPick: 'Cherry-Pick' }[conflict.operation] ?? conflict.operation} Conflict</strong>
+            <strong>{t('conflict.banner.title', { operation: t(`conflict.op.${conflict.operation}`) })}</strong>
           </span>
           <span class="conflict-count">{t('conflict.banner.resolved', { resolved: conflict.files.filter(f => f.resolved).length, total: conflict.files.length })}</span>
         </div>
         <div class="conflict-actions">
           <button class="banner-btn danger" onclick={() => { showAbortConfirmModal = true; }}>
-            <i class="codicon codicon-discard"></i> Abort
+            <i class="codicon codicon-discard"></i> {t('conflict.abort')}
           </button>
-          <button class="banner-btn success" disabled={conflict.files.some(f => !f.resolved)} onclick={() => { const op = conflict?.operation ?? 'merge'; vscode.postMessage({ type: 'continueOperation' }); conflict = null; vscode.postMessage({ type: 'showNotification', payload: { message: t('conflict.resolveSuccess', { operation: op }) } }); }}>
+          <button class="banner-btn success" disabled={conflict.files.some(f => !f.resolved)} onclick={() => { const op = conflict?.operation ?? 'merge'; vscode.postMessage({ type: 'continueOperation' }); conflict = null; vscode.postMessage({ type: 'showNotification', payload: { message: t('conflict.resolveSuccess', { operation: t(`conflict.op.${op}`) }) } }); }}>
             <i class="codicon codicon-check"></i> {t('conflict.banner.resolve')}
           </button>
         </div>

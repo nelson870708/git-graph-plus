@@ -113,6 +113,31 @@ class ModalStore {
       this.setUpstream.show || this.fetch.show || this.pull.show || this.push.show ||
       this.flowInit.show || this.flowStart.show || this.flowFinish.show || this.pushTag.show;
   }
+
+  /** Close every open modal. Called when the extension reports an error so the
+   *  user is not left staring at a stale modal whose operation has already failed. */
+  closeAll() {
+    this.closeDeleteBranch();
+    this.closeDeleteTag();
+    this.closeCreateBranch();
+    this.closeCreateTag();
+    this.closeMerge();
+    this.closeCheckoutRemote();
+    this.closeRenameBranch();
+    this.closeDeleteRemoteBranch();
+    this.closeRemoveWorktree();
+    this.closeStashApply();
+    this.closeStashRename();
+    this.closeStashSave();
+    this.closeSetUpstream();
+    this.closeFetch();
+    this.closePull();
+    this.closePush();
+    this.closeFlowInit();
+    this.closeFlowStart();
+    this.closeFlowFinish();
+    this.closePushTag();
+  }
 }
 
 export const modalStore = new ModalStore();

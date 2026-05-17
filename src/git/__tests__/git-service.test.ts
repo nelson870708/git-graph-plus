@@ -782,5 +782,128 @@ describe('GitService', () => {
       expect(calls[0]).not.toContain('--cached');
       expect(calls[0]).toContain('src/foo.ts');
     });
+
+    it('rejects path starting with - for unstaged untracked file', async () => {
+      // Untracked branch passes file directly to `git diff --no-index`; path
+      // must be validated before reaching git so a malicious filename cannot
+      // be misinterpreted as a flag.
+      const calls: string[][] = [];
+      mockExec(service, async (args) => {
+        calls.push(args);
+        // Pretend the file is untracked: first call (ls-files --error-unmatch) throws.
+        if (args[0] === 'ls-files') throw new GitError('', 1, args);
+        return '';
+      });
+      await expect(service.getUncommittedFileDiff('--evil', false)).rejects.toThrow();
+    });
+  });
+
+  describe('stageFile', () => {
+    it('passes -- before the path to prevent flag injection', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+
+      await service.stageFile('src/foo.ts');
+      expect(calls[0]).toEqual(['add', '--', 'src/foo.ts']);
+    });
+
+    it('rejects path starting with -', async () => {
+      await expect(service.stageFile('-A')).rejects.toThrow("must not start with '-'");
+    });
+
+    it('rejects absolute path', async () => {
+      await expect(service.stageFile('/etc/passwd')).rejects.toThrow('Unsafe path');
+    });
+
+    it('rejects path with parent traversal', async () => {
+      await expect(service.stageFile('../outside')).rejects.toThrow('Unsafe path');
+    });
+  });
+
+  describe('addRemote URL validation', () => {
+    it('accepts https URL', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+      await service.addRemote('origin', 'https://github.com/foo/bar.git');
+      expect(calls[0]).toEqual(['remote', 'add', 'origin', 'https://github.com/foo/bar.git']);
+    });
+
+    it('accepts ssh shorthand', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+      await service.addRemote('origin', 'git@github.com:foo/bar.git');
+      expect(calls[0][3]).toBe('git@github.com:foo/bar.git');
+    });
+
+    it('accepts ssh://', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+      await service.addRemote('origin', 'ssh://user@host/path/repo.git');
+      expect(calls[0][3]).toBe('ssh://user@host/path/repo.git');
+    });
+
+    it('rejects URL with newline (control char)', async () => {
+      await expect(service.addRemote('origin', 'https://x\nbad')).rejects.toThrow();
+    });
+
+    it('rejects file:// URL', async () => {
+      // file:// would let a malicious config point at arbitrary local paths.
+      await expect(service.addRemote('origin', 'file:///etc/passwd')).rejects.toThrow('Unsupported remote URL');
+    });
+
+    it('rejects unknown scheme', async () => {
+      await expect(service.addRemote('origin', 'javascript:alert(1)')).rejects.toThrow('Unsupported remote URL');
+    });
+  });
+
+  describe('searchCommits', () => {
+    it('rejects query containing newline', async () => {
+      // Newlines would let an attacker append fake CLI args to git log.
+      await expect(service.searchCommits('foo\nbar')).rejects.toThrow('Invalid search');
+    });
+
+    it('rejects author containing newline', async () => {
+      await expect(service.searchCommits('', { author: 'a\nb' })).rejects.toThrow('Invalid search');
+    });
+
+    it('rejects after/before that is not an ISO-ish date or relative spec', async () => {
+      await expect(service.searchCommits('', { after: '2024-01-01\nbad' })).rejects.toThrow('Invalid search');
+    });
+
+    it('passes valid query/author/dates through', async () => {
+      const calls: string[][] = [];
+      (service as any).cachedRemoteNames = [];
+      (service as any).remoteNamesCacheTime = Date.now();
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+
+      await service.searchCommits('fix bug', { author: 'jane', after: '2024-01-01', before: '2024-12-31' });
+      const args = calls.find(a => a[0] === 'log');
+      expect(args).toContain('--grep=fix bug');
+      expect(args).toContain('--author=jane');
+      expect(args).toContain('--after=2024-01-01');
+      expect(args).toContain('--before=2024-12-31');
+    });
+  });
+
+  describe('lsTree', () => {
+    it('passes -- before the path to prevent flag injection', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+
+      await service.lsTree('HEAD', 'src');
+      expect(calls[0]).toEqual(['ls-tree', 'HEAD', '--', 'src']);
+    });
+
+    it('omits -- when no path is given', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+
+      await service.lsTree('HEAD');
+      expect(calls[0]).toEqual(['ls-tree', 'HEAD']);
+    });
+
+    it('rejects path starting with -', async () => {
+      await expect(service.lsTree('HEAD', '-O')).rejects.toThrow("must not start with '-'");
+    });
   });
 });

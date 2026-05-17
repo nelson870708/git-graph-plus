@@ -150,6 +150,8 @@ export function activate(context: vscode.ExtensionContext) {
   }).catch((err) => { console.warn('Git Graph+: repo discovery failed:', err instanceof Error ? err.message : err); });
 
   let sidebarRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let sidebarRefreshing = false;
+  let sidebarRefreshQueued = false;
   context.subscriptions.push({
     dispose: () => {
       if (sidebarRefreshTimer) {
@@ -158,12 +160,10 @@ export function activate(context: vscode.ExtensionContext) {
       }
     },
   });
-  function refreshAll() {
-    if (sidebarRefreshTimer) { clearTimeout(sidebarRefreshTimer); }
-    sidebarRefreshTimer = setTimeout(async () => {
-      sidebarRefreshTimer = null;
-      
-      // Refresh all providers
+  async function doSidebarRefresh() {
+    if (sidebarRefreshing) { sidebarRefreshQueued = true; return; }
+    sidebarRefreshing = true;
+    try {
       await Promise.all([
         branchesProvider.refresh(),
         remotesProvider.refresh(),
@@ -181,6 +181,20 @@ export function activate(context: vscode.ExtensionContext) {
           branchesView.reveal(currentItem, { select: false, focus: false, expand: true }).then(undefined, () => {});
         }, 100);
       }
+    } finally {
+      sidebarRefreshing = false;
+      if (sidebarRefreshQueued) {
+        sidebarRefreshQueued = false;
+        // Re-run once more to pick up changes that arrived during refresh.
+        doSidebarRefresh();
+      }
+    }
+  }
+  function refreshAll() {
+    if (sidebarRefreshTimer) { clearTimeout(sidebarRefreshTimer); }
+    sidebarRefreshTimer = setTimeout(() => {
+      sidebarRefreshTimer = null;
+      doSidebarRefresh();
     }, 300);
   }
 

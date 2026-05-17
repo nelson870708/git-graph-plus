@@ -29,8 +29,22 @@ export class MainPanel {
   private isFirstGetLog = true;
   private logSequence = 0;
   private cachedRepos: RepoInfo[] = [];
+  private disposed = false;
   public static onSidebarRefresh: (() => void) | null = null;
   public static onRepoChange: ((repoPath: string) => void) | null = null;
+
+  /** Safe postMessage: drops messages after disposal and swallows the throw
+   *  that VS Code raises if the underlying webview has gone away. Use this
+   *  in every async path that may resolve after the user closes the panel. */
+  private post(msg: unknown): void {
+    if (this.disposed) return;
+    try {
+      this.panel.webview.postMessage(msg);
+    } catch {
+      // Webview was torn down between our check and the call (e.g., user
+      // closed the panel mid-flight). Nothing to do.
+    }
+  }
 
   public static setExtraEnv(env: Record<string, string>): void {
     this.extraEnv = env;
@@ -45,7 +59,7 @@ export class MainPanel {
     svc.setWarningHandler(msg => {
       // Surface non-fatal git failures (e.g., stash log / uncommitted status / remote list
       // failures) to the webview so the user knows the displayed graph may be incomplete.
-      this.panel.webview.postMessage({ type: 'error', payload: { message: `Git Graph+: ${msg}` } });
+      this.post({ type: 'error', payload: { message: `Git Graph+: ${msg}` } });
     });
     // On auth failure (missing/invalid HTTPS credentials), route through the
     // built-in `vscode.git` extension so the user sees the same credential
@@ -82,7 +96,7 @@ export class MainPanel {
         if (e.affectsConfiguration('gitGraphPlus.locale')) {
           const localeSetting = vscode.workspace.getConfiguration('gitGraphPlus').get<string>('locale', 'auto');
           const locale = localeSetting === 'auto' ? (vscode.env.language || 'en') : localeSetting;
-          this.panel.webview.postMessage({ type: 'setLocale', payload: { locale } });
+          this.post({ type: 'setLocale', payload: { locale } });
         }
       })
     );
@@ -93,7 +107,7 @@ export class MainPanel {
     const localeSetting = vscode.workspace.getConfiguration('gitGraphPlus').get<string>('locale', 'auto');
     const locale = localeSetting === 'auto' ? (vscode.env.language || 'en') : localeSetting;
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    this.panel.webview.postMessage({ type: 'setLocale', payload: { locale, homeDir } });
+    this.post({ type: 'setLocale', payload: { locale, homeDir } });
 
     this.panel.webview.onDidReceiveMessage(
       (message: WebviewMessage) => this.handleMessage(message),
@@ -188,7 +202,7 @@ export class MainPanel {
 
     MainPanel.onRepoChange?.(newPath);
 
-    this.panel.webview.postMessage({
+    this.post({
       type: 'repoList',
       payload: { repos: this.cachedRepos, active: this.repoPath },
     });
@@ -198,7 +212,7 @@ export class MainPanel {
 
   public postShowModal(payload: { modal: string; [key: string]: any }): void {
     this.panel.reveal();
-    this.panel.webview.postMessage({ type: 'showModal', payload });
+    this.post({ type: 'showModal', payload });
   }
 
   private static pendingModal: { modal: string; [key: string]: any } | null = null;
@@ -216,7 +230,7 @@ export class MainPanel {
     if (MainPanel.pendingModal) {
       const payload = MainPanel.pendingModal;
       MainPanel.pendingModal = null;
-      this.panel.webview.postMessage({ type: 'showModal', payload });
+      this.post({ type: 'showModal', payload });
     }
   }
 
@@ -249,7 +263,7 @@ export class MainPanel {
           const commits = hasMore ? allFetched.slice(0, requestedLimit) : allFetched;
           const fullGraph = commits.length > 0 ? buildFullGraph(commits, logBranches) : { paths: [], links: [], dots: [], commitLeftMargin: [] };
           const graph = commits.length > 0 ? buildGraphFromFullData(commits, fullGraph) : [];
-          this.panel.webview.postMessage({
+          this.post({
             type: 'logData',
             payload: {
               commits,
@@ -274,7 +288,7 @@ export class MainPanel {
             this.gitService.stashList(),
             this.gitService.worktreeList(),
           ]);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'branchData',
             payload: { branches, tags, remotes, stashes, worktrees },
           });
@@ -287,7 +301,7 @@ export class MainPanel {
         }
         case 'getCommitDiff': {
           const commitFiles = await this.gitService.showCommitFiles(message.payload.hash);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'commitDiffData',
             payload: { hash: message.payload.hash, files: commitFiles },
           });
@@ -295,7 +309,7 @@ export class MainPanel {
         }
         case 'getFileDiff': {
           const diffs = await this.gitService.showCommitDiff(message.payload.hash, message.payload.file);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'fileDiffData',
             payload: { hash: message.payload.hash, file: message.payload.file, diff: diffs[0] || null },
           });
@@ -303,25 +317,25 @@ export class MainPanel {
         }
         case 'checkDirty': {
           const dirty = await this.gitService.isDirty();
-          this.panel.webview.postMessage({ type: 'dirtyState', payload: { dirty, requestId: message.payload?.requestId } });
+          this.post({ type: 'dirtyState', payload: { dirty, requestId: message.payload?.requestId } });
           break;
         }
         case 'getUncommittedDiff': {
           const result = await this.gitService.getUncommittedDiff();
-          this.panel.webview.postMessage({ type: 'uncommittedDiffData', payload: result });
+          this.post({ type: 'uncommittedDiffData', payload: result });
           break;
         }
         case 'getUncommittedFileDiff': {
           const diff = await this.gitService.getUncommittedFileDiff(message.payload.file, message.payload.staged);
           const key = (message.payload.staged ? 'staged' : 'unstaged') + ':' + message.payload.file;
-          this.panel.webview.postMessage({ type: 'fileDiffData', payload: { hash: 'UNCOMMITTED', file: message.payload.file, key, diff } });
+          this.post({ type: 'fileDiffData', payload: { hash: 'UNCOMMITTED', file: message.payload.file, key, diff } });
           break;
         }
         case 'predictConflicts': {
           const result = message.payload.mode === 'rebase'
             ? await this.gitService.predictRebaseConflicts(message.payload.ours, message.payload.theirs)
             : await this.gitService.predictConflicts(message.payload.ours, message.payload.theirs, message.payload.mergeBase);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'conflictPrediction',
             payload: { ...result, requestId: message.payload.requestId },
           });
@@ -344,11 +358,11 @@ export class MainPanel {
               try {
                 await this.gitService.stashPop(0);
               } catch {
-                this.panel.webview.postMessage({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
+                this.post({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
               }
             }
           }
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'checkout', success: true },
           });
@@ -372,14 +386,14 @@ export class MainPanel {
                 try {
                   await this.gitService.stashPop(0);
                 } catch {
-                  this.panel.webview.postMessage({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
+                  this.post({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
                 }
               }
             }
           } else {
             await this.gitService.createBranch(message.payload.name, message.payload.startPoint);
           }
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'createBranch', success: true },
           });
@@ -409,7 +423,7 @@ export class MainPanel {
               try { await this.gitService.deleteRemoteBranch(message.payload.name); } catch { /* ignore */ }
             }
           }
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'deleteBranch', success: true },
           });
@@ -419,7 +433,7 @@ export class MainPanel {
         }
         case 'deleteRemoteBranch': {
           await this.gitService.deleteRemoteBranch(message.payload.name, message.payload.remote);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'deleteRemoteBranch', success: true },
           });
@@ -429,7 +443,7 @@ export class MainPanel {
         }
         case 'renameBranch': {
           await this.gitService.renameBranch(message.payload.oldName, message.payload.newName);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'renameBranch', success: true },
           });
@@ -439,7 +453,7 @@ export class MainPanel {
         }
         case 'setUpstream': {
           await this.gitService.setUpstream(message.payload.branch, message.payload.remote, message.payload.remoteBranch, { createRemote: message.payload.createRemote });
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'setUpstream', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'setUpstream', success: true } });
           await this.refreshAll();
           break;
         }
@@ -458,11 +472,11 @@ export class MainPanel {
               try {
                 await this.gitService.stashPop(0);
               } catch {
-                this.panel.webview.postMessage({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
+                this.post({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterCheckoutFailed') } });
               }
             }
           }
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'checkout', success: true },
           });
@@ -472,7 +486,7 @@ export class MainPanel {
         }
         case 'merge': {
           await this.gitService.merge(message.payload.branch, { noFf: message.payload.noFf, ffOnly: message.payload.ffOnly, squash: message.payload.squash });
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'merge', success: true },
           });
@@ -482,7 +496,7 @@ export class MainPanel {
         }
         case 'abortMerge': {
           await this.gitService.abortMerge();
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'abortMerge', success: true },
           });
@@ -508,7 +522,7 @@ export class MainPanel {
         }
         case 'fetch': {
           await this.gitService.fetch(message.payload.remote, { prune: message.payload.prune });
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'fetch', success: true },
           });
@@ -527,11 +541,11 @@ export class MainPanel {
               try {
                 await this.gitService.stashPop(0);
               } catch {
-                this.panel.webview.postMessage({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterPullFailed') } });
+                this.post({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterPullFailed') } });
               }
             }
           }
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'pull', success: true },
           });
@@ -541,7 +555,7 @@ export class MainPanel {
         }
         case 'push': {
           await this.gitService.push(message.payload.remote, message.payload.branch, { force: message.payload.force, setUpstream: message.payload.setUpstream });
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'push', success: true },
           });
@@ -551,7 +565,7 @@ export class MainPanel {
         }
         case 'addRemote': {
           await this.gitService.addRemote(message.payload.name, message.payload.url);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'addRemote', success: true },
           });
@@ -561,7 +575,7 @@ export class MainPanel {
         }
         case 'removeRemote': {
           await this.gitService.removeRemote(message.payload.name);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'removeRemote', success: true },
           });
@@ -571,7 +585,7 @@ export class MainPanel {
         }
         case 'rebase': {
           await this.gitService.rebase(message.payload.onto, { autostash: message.payload.autostash });
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'rebase', success: true },
           });
@@ -581,7 +595,7 @@ export class MainPanel {
         }
         case 'abortRebase': {
           await this.gitService.abortRebase();
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'abortRebase', success: true },
           });
@@ -590,7 +604,7 @@ export class MainPanel {
         }
         case 'continueRebase': {
           await this.gitService.continueRebase();
-          this.panel.webview.postMessage({
+          this.post({
             type: 'operationComplete',
             payload: { operation: 'continueRebase', success: true },
           });
@@ -599,24 +613,24 @@ export class MainPanel {
         }
         case 'skipRebase': {
           await this.gitService.skipRebase();
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'skipRebase', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'skipRebase', success: true } });
           await this.refreshAll();
           break;
         }
         case 'interactiveRebase': {
           await this.gitService.interactiveRebase(message.payload.base, message.payload.todos);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'interactiveRebase', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'interactiveRebase', success: true } });
           await this.refreshAll();
           break;
         }
         case 'getRebaseCommits': {
           const rebaseCommits = await this.gitService.getRebaseCommits(message.payload.base);
-          this.panel.webview.postMessage({ type: 'rebaseCommitsData', payload: { base: message.payload.base, commits: rebaseCommits } });
+          this.post({ type: 'rebaseCommitsData', payload: { base: message.payload.base, commits: rebaseCommits } });
           break;
         }
         case 'reset': {
           await this.gitService.reset(message.payload.ref, message.payload.mode);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'reset', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'reset', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('resetComplete', message.payload.ref.substring(0, 7)));
           await this.refreshAll();
           break;
@@ -626,10 +640,10 @@ export class MainPanel {
           await this.gitService.stashSave(message.payload.message, message.payload.includeUntracked, message.payload.keepIndex);
           const afterCount = (await this.gitService.stashList()).length;
           if (afterCount > beforeCount) {
-            this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'stashSave', success: true } });
+            this.post({ type: 'operationComplete', payload: { operation: 'stashSave', success: true } });
             vscode.window.showInformationMessage(vscode.l10n.t('changesStashed'));
           } else {
-            this.panel.webview.postMessage({ type: 'error', payload: { message: vscode.l10n.t('noChangesToStash') } });
+            this.post({ type: 'error', payload: { message: vscode.l10n.t('noChangesToStash') } });
           }
           await this.refreshAll();
           break;
@@ -640,14 +654,14 @@ export class MainPanel {
           } else {
             await this.gitService.stashApply(message.payload.index);
           }
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'stashApply', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'stashApply', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t(message.payload.drop ? 'stashPopped' : 'stashApplied'));
           await this.refreshAll();
           break;
         }
         case 'stashDrop': {
           await this.gitService.stashDrop(message.payload.index);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'stashDrop', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'stashDrop', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('stashDropped'));
           await this.refreshAll();
           break;
@@ -661,7 +675,7 @@ export class MainPanel {
           const homeDir = process.env.HOME || process.env.USERPROFILE || '';
           const wtPath = message.payload.path.replace(/^~/, homeDir);
           await this.gitService.worktreeAdd(wtPath, message.payload.branch, message.payload.newBranch);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'worktreeAdd', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'worktreeAdd', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('worktreeAdded', message.payload.path));
           await this.refreshAll();
           break;
@@ -672,7 +686,7 @@ export class MainPanel {
           if (message.payload.deleteBranch) {
             await this.gitService.deleteBranch(message.payload.deleteBranch, true);
           }
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'worktreeRemove', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'worktreeRemove', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('worktreeRemoved'));
           await this.refreshAll();
           break;
@@ -684,28 +698,28 @@ export class MainPanel {
         }
         case 'cherryPick': {
           await this.gitService.cherryPick(message.payload.commit, { noCommit: message.payload.noCommit });
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'cherryPick', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'cherryPick', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('cherryPicked', message.payload.commit.substring(0, 7)));
           await this.refreshAll();
           break;
         }
         case 'revert': {
           await this.gitService.revert(message.payload.commit, { noCommit: message.payload.noCommit });
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'revert', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'revert', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('reverted', message.payload.commit.substring(0, 7)));
           await this.refreshAll();
           break;
         }
         case 'createTag': {
           await this.gitService.createTag(message.payload.name, message.payload.ref, message.payload.message);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'createTag', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'createTag', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('tagCreated', message.payload.name));
           await this.refreshAll();
           break;
         }
         case 'deleteTag': {
           await this.gitService.deleteTag(message.payload.name);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'deleteTag', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'deleteTag', success: true } });
           vscode.window.showInformationMessage(vscode.l10n.t('tagDeleted', message.payload.name));
           await this.refreshAll();
           break;
@@ -714,14 +728,14 @@ export class MainPanel {
           const tags = await this.gitService.tags();
           const tag = tags.find(t => t.name === message.payload.name);
           if (tag) {
-            this.panel.webview.postMessage({ type: 'tagDetailsData', payload: tag });
+            this.post({ type: 'tagDetailsData', payload: tag });
           }
           break;
         }
         case 'getCommitData': {
           const commit = await this.gitService.searchByHash(message.payload.hash);
           if (commit) {
-            this.panel.webview.postMessage({ type: 'commitData', payload: { commit } });
+            this.post({ type: 'commitData', payload: { commit } });
           }
           break;
         }
@@ -732,63 +746,63 @@ export class MainPanel {
             before: message.payload.before,
           });
           const searchGraph = buildGraph(results);
-          this.panel.webview.postMessage({ type: 'searchResults', payload: { commits: results, graph: searchGraph } });
+          this.post({ type: 'searchResults', payload: { commits: results, graph: searchGraph } });
           break;
         }
         case 'searchByHash': {
           const found = await this.gitService.searchByHash(message.payload.hash);
           if (found) {
             const foundGraph = buildGraph([found]);
-            this.panel.webview.postMessage({ type: 'searchResults', payload: { commits: [found], graph: foundGraph } });
+            this.post({ type: 'searchResults', payload: { commits: [found], graph: foundGraph } });
           } else {
-            this.panel.webview.postMessage({ type: 'searchResults', payload: { commits: [], graph: [] } });
+            this.post({ type: 'searchResults', payload: { commits: [], graph: [] } });
           }
           break;
         }
         case 'searchByFile': {
           const results = await this.gitService.searchByFile(message.payload.file);
           const searchGraph = buildGraph(results);
-          this.panel.webview.postMessage({ type: 'searchResults', payload: { commits: results, graph: searchGraph } });
+          this.post({ type: 'searchResults', payload: { commits: results, graph: searchGraph } });
           break;
         }
         case 'getActivityLog': {
-          this.panel.webview.postMessage({ type: 'activityLogData', payload: this.gitService.getActivityLog() });
+          this.post({ type: 'activityLogData', payload: this.gitService.getActivityLog() });
           break;
         }
         case 'getReflog': {
           const result = await this.gitService.getReflog(message.payload?.limit ?? 200, message.payload?.ref ?? 'HEAD');
-          this.panel.webview.postMessage({ type: 'reflogData', payload: result });
+          this.post({ type: 'reflogData', payload: result });
           break;
         }
         // --- Bisect ---
         case 'bisectStart': {
           const result = await this.gitService.bisectStart(message.payload.bad, message.payload.good);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'bisectStart', success: true } });
-          this.panel.webview.postMessage({ type: 'bisectResult', payload: { message: result } });
+          this.post({ type: 'operationComplete', payload: { operation: 'bisectStart', success: true } });
+          this.post({ type: 'bisectResult', payload: { message: result } });
           await this.refreshAll();
           break;
         }
         case 'bisectGood': {
           const result = await this.gitService.bisectGood(message.payload.ref);
-          this.panel.webview.postMessage({ type: 'bisectResult', payload: { message: result } });
+          this.post({ type: 'bisectResult', payload: { message: result } });
           await this.refreshAll();
           break;
         }
         case 'bisectBad': {
           const result = await this.gitService.bisectBad(message.payload.ref);
-          this.panel.webview.postMessage({ type: 'bisectResult', payload: { message: result } });
+          this.post({ type: 'bisectResult', payload: { message: result } });
           await this.refreshAll();
           break;
         }
         case 'bisectSkip': {
           const result = await this.gitService.bisectSkip();
-          this.panel.webview.postMessage({ type: 'bisectResult', payload: { message: result } });
+          this.post({ type: 'bisectResult', payload: { message: result } });
           await this.refreshAll();
           break;
         }
         case 'bisectReset': {
           await this.gitService.bisectReset();
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'bisectReset', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'bisectReset', success: true } });
           await this.refreshAll();
           break;
         }
@@ -798,7 +812,7 @@ export class MainPanel {
             this.gitService.statsCommitsByAuthor(),
             this.gitService.statsCommitsByWeekdayHour(),
           ]);
-          this.panel.webview.postMessage({
+          this.post({
             type: 'statsData',
             payload: { byAuthor, byWeekdayHour },
           });
@@ -806,7 +820,7 @@ export class MainPanel {
         }
         case 'copyToClipboard': {
           await vscode.env.clipboard.writeText(message.payload.text);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'copied', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'copied', success: true } });
           break;
         }
         case 'showNotification': {
@@ -829,7 +843,7 @@ export class MainPanel {
             this.gitService.diffCommitToWorking(message.payload.hash),
             this.gitService.diffFiles(message.payload.hash),
           ]);
-          this.panel.webview.postMessage({ type: 'commitDiffData', payload: { hash: '', diffs: workingDiffs, files: workingFiles } });
+          this.post({ type: 'commitDiffData', payload: { hash: '', diffs: workingDiffs, files: workingFiles } });
           break;
         }
         case 'compareCommits': {
@@ -837,13 +851,13 @@ export class MainPanel {
             this.gitService.diffCommits(message.payload.ref1, message.payload.ref2),
             this.gitService.diffFiles(message.payload.ref1, message.payload.ref2),
           ]);
-          this.panel.webview.postMessage({ type: 'commitDiffData', payload: { hash: '', diffs: compareDiffs, files: compareFiles } });
+          this.post({ type: 'commitDiffData', payload: { hash: '', diffs: compareDiffs, files: compareFiles } });
           break;
         }
         // --- File tree at commit ---
         case 'lsTree': {
           const entries = await this.gitService.lsTree(message.payload.ref, message.payload.path);
-          this.panel.webview.postMessage({ type: 'lsTreeData', payload: { ref: message.payload.ref, path: message.payload.path, entries } });
+          this.post({ type: 'lsTreeData', payload: { ref: message.payload.ref, path: message.payload.path, entries } });
           break;
         }
         // --- Git Flow ---
@@ -857,12 +871,12 @@ export class MainPanel {
               config = await this.gitService.getFlowConfig();
             }
           }
-          this.panel.webview.postMessage({ type: 'flowStatus', payload: { installed, initialized, config } });
+          this.post({ type: 'flowStatus', payload: { installed, initialized, config } });
           break;
         }
         case 'flowInit': {
           await this.gitService.flowInit(message.payload);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'flowInit', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'flowInit', success: true } });
           await this.refreshAll();
           break;
         }
@@ -881,60 +895,60 @@ export class MainPanel {
           } else {
             throw new Error(`Unknown flow action: ${action}`);
           }
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: `flow-${action}`, success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: `flow-${action}`, success: true } });
           await this.refreshAll();
           break;
         }
         case 'getFlowBranches': {
           const branches = await this.gitService.getFlowBranches();
-          this.panel.webview.postMessage({ type: 'flowBranches', payload: branches });
+          this.post({ type: 'flowBranches', payload: branches });
           break;
         }
         // --- Submodule ---
         case 'getSubmodules': {
           const submodules = await this.gitService.submoduleStatus();
-          this.panel.webview.postMessage({ type: 'submoduleData', payload: submodules });
+          this.post({ type: 'submoduleData', payload: submodules });
           break;
         }
         case 'submoduleUpdate': {
           await this.gitService.submoduleUpdate(true);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'submoduleUpdate', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'submoduleUpdate', success: true } });
           break;
         }
         // --- LFS ---
         case 'getLfsFiles': {
           const lfsFiles = await this.gitService.lfsLsFiles();
           const lfsLocks = await this.gitService.lfsLocks();
-          this.panel.webview.postMessage({ type: 'lfsData', payload: { files: lfsFiles, locks: lfsLocks } });
+          this.post({ type: 'lfsData', payload: { files: lfsFiles, locks: lfsLocks } });
           break;
         }
         case 'lfsLock': {
           await this.gitService.lfsLock(message.payload.file);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'lfsLock', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'lfsLock', success: true } });
           // Refresh LFS data
           const lfsFiles = await this.gitService.lfsLsFiles();
           const lfsLocks = await this.gitService.lfsLocks();
-          this.panel.webview.postMessage({ type: 'lfsData', payload: { files: lfsFiles, locks: lfsLocks } });
+          this.post({ type: 'lfsData', payload: { files: lfsFiles, locks: lfsLocks } });
           break;
         }
         case 'lfsUnlock': {
           await this.gitService.lfsUnlock(message.payload.file, message.payload.force);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'lfsUnlock', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'lfsUnlock', success: true } });
           // Refresh LFS data
           const lfsFiles2 = await this.gitService.lfsLsFiles();
           const lfsLocks2 = await this.gitService.lfsLocks();
-          this.panel.webview.postMessage({ type: 'lfsData', payload: { files: lfsFiles2, locks: lfsLocks2 } });
+          this.post({ type: 'lfsData', payload: { files: lfsFiles2, locks: lfsLocks2 } });
           break;
         }
         // --- Worktree ---
         case 'getWorktrees': {
           const worktrees = await this.gitService.worktreeList();
-          this.panel.webview.postMessage({ type: 'worktreeData', payload: worktrees });
+          this.post({ type: 'worktreeData', payload: worktrees });
           break;
         }
         case 'pruneWorktrees': {
           await this.gitService.worktreePrune();
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'pruneWorktrees', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'pruneWorktrees', success: true } });
           await this.refreshAll();
           break;
         }
@@ -945,17 +959,17 @@ export class MainPanel {
           } else {
             await this.gitService.pushTagToAllRemotes(message.payload.name);
           }
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'pushTag', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'pushTag', success: true } });
           break;
         }
         case 'pushAllTags': {
           await this.gitService.pushAllTags(message.payload.remote);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'pushAllTags', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'pushAllTags', success: true } });
           break;
         }
         case 'deleteRemoteTag': {
           await this.gitService.deleteRemoteTag(message.payload.name, message.payload.remote);
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'deleteRemoteTag', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'deleteRemoteTag', success: true } });
           await this.refreshAll();
           break;
         }
@@ -984,12 +998,12 @@ export class MainPanel {
             } else {
               base64 = await this.gitService.getImageBase64(ref, filePath);
             }
-            this.panel.webview.postMessage({
+            this.post({
               type: 'imageData',
               payload: { ref, path: filePath, base64, mimeType },
             });
           } catch {
-            this.panel.webview.postMessage({
+            this.post({
               type: 'imageData',
               payload: { ref, path: filePath, base64: '', mimeType },
             });
@@ -1023,7 +1037,7 @@ export class MainPanel {
 
           // Update repo list in webview with cached repos but new active path
           // Send this BEFORE refreshAll so the dropdown updates instantly
-          this.panel.webview.postMessage({
+          this.post({
             type: 'repoList',
             payload: { repos: this.cachedRepos, active: this.repoPath },
           });
@@ -1041,7 +1055,7 @@ export class MainPanel {
             ]);
             const conflictSet = new Set(stillConflicting);
             if (opState.type) {
-              this.panel.webview.postMessage({
+              this.post({
                 type: 'conflictData',
                 payload: {
                   operation: opState.type,
@@ -1060,7 +1074,7 @@ export class MainPanel {
             ]);
             const conflictSet = new Set(stillConflicting);
             if (opState.type) {
-              this.panel.webview.postMessage({
+              this.post({
                 type: 'conflictData',
                 payload: {
                   operation: opState.type,
@@ -1073,13 +1087,13 @@ export class MainPanel {
         }
         case 'continueOperation': {
           await this.gitService.continueOperation();
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'continue', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'continue', success: true } });
           await this.refreshAll();
           break;
         }
         case 'abortOperation': {
           await this.gitService.abortOperation();
-          this.panel.webview.postMessage({ type: 'operationComplete', payload: { operation: 'abort', success: true } });
+          this.post({ type: 'operationComplete', payload: { operation: 'abort', success: true } });
           await this.refreshAll();
           break;
         }
@@ -1102,7 +1116,7 @@ export class MainPanel {
 
       // Detect non-git-repo errors early to avoid unnecessary follow-up git calls
       if (err instanceof GitError && /not a git repository/.test(err.stderr)) {
-        this.panel.webview.postMessage({ type: 'notGitRepo' });
+        this.post({ type: 'notGitRepo' });
         return;
       }
 
@@ -1130,7 +1144,7 @@ export class MainPanel {
         }
 
         const detail = err.stderr.trim().split('\n')[0];
-        this.panel.webview.postMessage({ type: 'error', payload: { message: msg } });
+        this.post({ type: 'error', payload: { message: msg } });
 
         const action = await vscode.window.showErrorMessage(
           `${msg}${hint ? `\n→ ${hint}` : ''}`,
@@ -1151,7 +1165,7 @@ export class MainPanel {
       if (conflictFiles.length > 0) {
         this.allConflictFiles = conflictFiles;
         const opState = await this.gitService.getOperationState();
-        this.panel.webview.postMessage({
+        this.post({
           type: 'conflictData',
           payload: { operation: (opState.type === 'squash' ? 'merge' : opState.type) ?? 'merge', files: conflictFiles.map(f => ({ path: f, resolved: false })) },
         });
@@ -1159,7 +1173,7 @@ export class MainPanel {
         // failed while in a paused merge), still surface the underlying error — otherwise
         // the failure is invisible because the conflict UI just re-renders unchanged.
         if (message.type === 'stageFile' || message.type === 'refreshConflicts') {
-          this.panel.webview.postMessage({
+          this.post({
             type: 'error',
             payload: { message: errorMessage },
           });
@@ -1168,7 +1182,7 @@ export class MainPanel {
         vscode.commands.executeCommand('workbench.view.scm');
         await this.refreshAll();
       } else {
-        this.panel.webview.postMessage({
+        this.post({
           type: 'error',
           payload: { message: errorMessage },
         });
@@ -1264,7 +1278,7 @@ export class MainPanel {
       const graph = allCommits.length > 0 ? buildGraph(allCommits, branches) : [];
       const fg = allCommits.length > 0 ? buildFullGraph(allCommits, branches) : { paths: [], links: [], dots: [], commitLeftMargin: [] };
       // Send as single combined message to ensure atomic update
-      this.panel.webview.postMessage({
+      this.post({
         type: 'fullRefresh',
         payload: {
           logData: { commits: allCommits, hasMore, currentLimit: this.currentLimit, graph, paths: fg.paths, links: fg.links, dots: fg.dots, commitLeftMargin: fg.commitLeftMargin, remoteFilter: this.currentRemoteFilter, branches: this.currentBranchFilter },
@@ -1275,7 +1289,7 @@ export class MainPanel {
     } catch (err) {
       console.warn('Git Graph+: refresh failed:', err instanceof Error ? err.message : err);
       if (err instanceof GitError && /not a git repository/.test(err.stderr)) {
-        try { this.panel.webview.postMessage({ type: 'notGitRepo' }); } catch { /* panel disposed */ }
+        try { this.post({ type: 'notGitRepo' }); } catch { /* panel disposed */ }
       }
     } finally {
       this.refreshing = false;
@@ -1332,7 +1346,7 @@ export class MainPanel {
         this.refreshAll();
       }
 
-      this.panel.webview.postMessage({
+      this.post({
         type: 'repoList',
         payload: { repos, active },
       });
@@ -1342,7 +1356,7 @@ export class MainPanel {
   }
 
   private async onRepoChanged(what: string): Promise<void> {
-    this.panel.webview.postMessage({
+    this.post({
       type: 'repoChanged',
       payload: { what },
     });
@@ -1361,7 +1375,7 @@ export class MainPanel {
         this.allConflictFiles = conflictFiles;
       }
       const conflictSet = new Set(conflictFiles);
-      this.panel.webview.postMessage({
+      this.post({
         type: 'conflictData',
         payload: {
           operation: opState.type,
@@ -1372,7 +1386,7 @@ export class MainPanel {
       const stoppedShaPath = path.join(this.repoPath, '.git', 'rebase-merge', 'stopped-sha');
       const editPaused = await access(stoppedShaPath).then(() => true).catch(() => false);
       if (editPaused) {
-        this.panel.webview.postMessage({
+        this.post({
           type: 'operationPaused',
           payload: { operation: 'rebase' },
         });
@@ -1380,7 +1394,7 @@ export class MainPanel {
     } else if (this.allConflictFiles.length > 0 && !opState.type) {
       // Operation was completed or aborted externally - notify webview to dismiss conflict UI
       this.allConflictFiles = [];
-      this.panel.webview.postMessage({
+      this.post({
         type: 'operationComplete',
         payload: { operation: 'merge', success: true },
       });
@@ -1415,8 +1429,13 @@ export class MainPanel {
   }
 
   private dispose(): void {
+    this.disposed = true;
     MainPanel.savedRemoteFilter = this.currentRemoteFilter;
     MainPanel.savedBranchFilter = this.currentBranchFilter;
+    // Drop any modal request that was queued for this panel but never delivered
+    // (panel closed before the webview was ready). A fresh panel opened later
+    // for an unrelated reason should not surface a stale modal.
+    MainPanel.pendingModal = null;
     MainPanel.currentPanel = undefined;
     this.panel.dispose();
     while (this.disposables.length) {

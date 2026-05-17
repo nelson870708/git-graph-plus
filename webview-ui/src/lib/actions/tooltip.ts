@@ -59,6 +59,11 @@ export function tooltip(node: HTMLElement, text: string | undefined) {
   // Hide when the webview loses focus (Alt+Tab, clicking VS Code sidebar, etc.)
   window.addEventListener('blur', hide);
 
+  // Escape should always dismiss any visible tooltip, even when focus is
+  // trapped (e.g., inside a modal) and a blur event will not fire.
+  function onKeyDown(e: KeyboardEvent) { if (e.key === 'Escape') hide(); }
+  window.addEventListener('keydown', onKeyDown);
+
   node.addEventListener('mouseenter', show);
   node.addEventListener('mousemove', onMouseMove);
   node.addEventListener('mouseleave', hide);
@@ -72,6 +77,7 @@ export function tooltip(node: HTMLElement, text: string | undefined) {
       hide();
       observer.disconnect();
       window.removeEventListener('blur', hide);
+      window.removeEventListener('keydown', onKeyDown);
       node.removeEventListener('mouseenter', show);
       node.removeEventListener('mousemove', onMouseMove);
       node.removeEventListener('mouseleave', hide);
