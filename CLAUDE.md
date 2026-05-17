@@ -75,6 +75,6 @@ All communication is via `postMessage` / `onDidReceiveMessage`. Message types ar
 ## Key Conventions
 
 - Extension is bundled with **esbuild** (CJS, Node target). Webview is bundled with **Vite** (ESM, browser target).
-- Tests use **Vitest** and live in `src/git/__tests__/`.
+- Tests use **Vitest** and live in `src/git/__tests__/` (unit + `integration/`) and `src/services/__tests__/`. Coverage is uploaded to Codecov; see `vitest.config.mts` for excluded paths.
 - The extension activates when a `.git` folder is detected (`workspaceContains:.git`).
 - `vscode` is an external dependency (not bundled) — provided by the VS Code runtime.

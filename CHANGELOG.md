@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.11 (2026-05-17)
+
+### New Features
+- **VS Code Credential Prompt on Remote Auth Failure** - When fetch/pull/push fails due to missing or invalid HTTP credentials, Git Graph+ now drives VS Code's built-in credential prompt and retries the command once
+
+### Performance
+- **Graph Rendering** - Additional speedups in commit graph rendering hot paths
+
+### Bug Fixes
+- **Phantom Rebase State** - Status banner no longer falsely reports a rebase as in progress when `REBASE_HEAD` is left behind after `rebase --continue` succeeds; the rebase state directory is now the canonical marker
+- **Nested Git Repositories** - Untracked entries that are nested git repos (not registered as submodules) are now expanded and labeled distinctly instead of showing as an empty diff
+
 ## 0.3.10 (2026-05-17)
 
 ### New Features
