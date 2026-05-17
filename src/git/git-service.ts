@@ -24,6 +24,7 @@ export class GitService {
   private pendingRemoteNames: Promise<string[]> | null = null;
   private extraEnv: Record<string, string> = {};
   private warningHandler: ((message: string) => void) | null = null;
+  private authRetryHandler: ((remote?: string) => Promise<boolean>) | null = null;
 
   constructor(private repoPath: string) {}
 
@@ -32,9 +33,56 @@ export class GitService {
     this.warningHandler = handler;
   }
 
+  /**
+   * Register a callback invoked when a remote git command (fetch/pull/push)
+   * fails for authentication reasons. The handler is expected to surface
+   * VS Code's credential prompt (e.g., by routing through the built-in
+   * `vscode.git` extension). Returning `true` means "auth flow ran; please
+   * retry"; `false` means "no retry possible".
+   */
+  setAuthRetryHandler(handler: ((remote?: string) => Promise<boolean>) | null): void {
+    this.authRetryHandler = handler;
+  }
+
   private warn(message: string): void {
     console.warn(`Git Graph+: ${message}`);
     try { this.warningHandler?.(message); } catch { /* never let a handler break a git call */ }
+  }
+
+  /**
+   * Heuristic match against stderr fragments git emits when credentials are
+   * missing or wrong. SSH-key failures (`Permission denied (publickey)`) are
+   * intentionally excluded — VS Code's askpass can't resolve those, so a
+   * retry would just fail again.
+   */
+  private isAuthError(err: unknown): boolean {
+    if (!(err instanceof GitError)) return false;
+    const text = `${err.stderr ?? ''}\n${err.message ?? ''}`.toLowerCase();
+    return (
+      text.includes('authentication failed') ||
+      text.includes('could not read username') ||
+      text.includes('could not read password') ||
+      text.includes('terminal prompts disabled') ||
+      text.includes('invalid username or password') ||
+      text.includes('authentication required') ||
+      text.includes('http basic: access denied')
+    );
+  }
+
+  /**
+   * Runs a git command; on an authentication failure, asks the registered
+   * auth retry handler to drive VS Code's credential prompt (same flow the
+   * SCM panel uses), then retries the command once.
+   */
+  private async execWithAuthRetry(args: string[], remote?: string): Promise<string> {
+    try {
+      return await this.exec(args);
+    } catch (err) {
+      if (!this.isAuthError(err) || !this.authRetryHandler) throw err;
+      const retried = await this.authRetryHandler(remote).catch(() => false);
+      if (!retried) throw err;
+      return this.exec(args);
+    }
   }
 
   private assertSafeRef(ref: string, context: string): void {
@@ -705,7 +753,7 @@ export class GitService {
       args.push('--prune');
     }
     args.push('--progress');
-    return this.exec(args);
+    return this.execWithAuthRetry(args, remote);
   }
 
   async pull(remote?: string, branch?: string, options?: { rebase?: boolean }): Promise<string> {
@@ -719,7 +767,7 @@ export class GitService {
         args.push(branch);
       }
     }
-    return this.exec(args);
+    return this.execWithAuthRetry(args, remote);
   }
 
   async push(remote?: string, branch?: string, options?: { force?: 'with-lease' | 'force'; setUpstream?: boolean }): Promise<string> {
@@ -739,7 +787,7 @@ export class GitService {
         args.push(`refs/heads/${branch}`);
       }
     }
-    return this.exec(args);
+    return this.execWithAuthRetry(args, remote);
   }
 
   async addRemote(name: string, url: string): Promise<void> {
@@ -766,7 +814,7 @@ export class GitService {
     this.assertSafeRef(remote, 'setUpstream');
     this.assertSafeRef(remoteBranch, 'setUpstream');
     if (options?.createRemote) {
-      await this.exec(['push', '-u', remote, `${localBranch}:${remoteBranch}`]);
+      await this.execWithAuthRetry(['push', '-u', remote, `${localBranch}:${remoteBranch}`], remote);
     } else {
       await this.exec(['branch', '--set-upstream-to', `${remote}/${remoteBranch}`, localBranch]);
     }
@@ -1405,35 +1453,35 @@ export class GitService {
     this.assertSafeRef(name, 'push refs/tags');
     if (remote) { this.assertSafeRef(remote, 'push refs/tags'); }
     const r = remote || 'origin';
-    return this.exec(['push', r, `refs/tags/${name}`]);
+    return this.execWithAuthRetry(['push', r, `refs/tags/${name}`], r);
   }
 
   async pushTagToAllRemotes(name: string): Promise<void> {
     this.assertSafeRef(name, 'push refs/tags');
     const remotes = await this.getRemoteNames();
     for (const r of remotes) {
-      await this.exec(['push', r, `refs/tags/${name}`]);
+      await this.execWithAuthRetry(['push', r, `refs/tags/${name}`], r);
     }
   }
 
   async pushAllTags(remote?: string): Promise<string> {
     if (remote) { this.assertSafeRef(remote, 'push --tags'); }
     const r = remote || 'origin';
-    return this.exec(['push', r, '--tags']);
+    return this.execWithAuthRetry(['push', r, '--tags'], r);
   }
 
   async deleteRemoteBranch(name: string, remote?: string): Promise<string> {
     this.assertSafeRef(name, 'push --delete');
     if (remote) { this.assertSafeRef(remote, 'push --delete'); }
     const r = remote || 'origin';
-    return this.exec(['push', r, '--delete', name]);
+    return this.execWithAuthRetry(['push', r, '--delete', name], r);
   }
 
   async deleteRemoteTag(name: string, remote?: string): Promise<string> {
     this.assertSafeRef(name, 'push :refs/tags');
     if (remote) { this.assertSafeRef(remote, 'push :refs/tags'); }
     const r = remote || 'origin';
-    return this.exec(['push', r, `:refs/tags/${name}`]);
+    return this.execWithAuthRetry(['push', r, `:refs/tags/${name}`], r);
   }
 
   // --- Image at ref (binary-safe) ---
