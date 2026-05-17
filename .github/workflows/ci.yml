@@ -60,6 +60,17 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+      # Codecov Test Analytics — flaky detection, slow-test ranking, failure
+      # history. `if: always()` so failed runs still upload (the failures are
+      # the most interesting data points).
+      - name: Upload test results to Codecov
+        if: always() && matrix.node-version == 22
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./test-results.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Build extension
         run: npm run build:extension
 

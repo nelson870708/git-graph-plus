@@ -18,6 +18,7 @@ esbuild.config.mjs
 tsconfig.json
 vitest.config.mts
 coverage/**
+test-results.xml
 CLAUDE.md
 .gitignore
 **/*.map

@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
+    // JUnit output drives Codecov Test Analytics (flaky detection, slow-test
+    // ranking, failure history). `default` keeps the local console output.
+    reporters: ['default', ['junit', { outputFile: 'test-results.xml' }]],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
