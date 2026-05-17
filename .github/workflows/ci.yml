@@ -21,6 +21,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # git-flow is required for the Git Flow integration tests
+      # (submodule-lfs-flow.integration.test.ts). Without it those tests
+      # auto-skip via describe.skipIf — installing it ensures full coverage
+      # of the flow* methods on CI.
+      - name: Install git-flow
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends git-flow
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
