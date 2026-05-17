@@ -4,8 +4,8 @@
   import { branchStore } from '../../lib/stores/branches.svelte';
   import { uiStore } from '../../lib/stores/ui.svelte';
   import { t } from '../../lib/i18n/index.svelte';
-  import Modal from '../common/Modal.svelte';
   import AddRemoteModal from '../modals/AddRemoteModal.svelte';
+  import NoRemotesErrorModal from '../modals/NoRemotesErrorModal.svelte';
   import { tooltip } from '../../lib/actions/tooltip';
   import { modalStore } from '../../lib/stores/modals.svelte';
   import type { FlowStatus, FlowBranches } from '../../lib/types';
@@ -308,13 +308,10 @@
 {/if}
 
 {#if showNoRemotesError}
-  <Modal title={t('common.error')} onClose={() => { showNoRemotesError = false; }}>
-    <p class="modal-desc">{t('toolbar.noRemotes')}</p>
-    <div class="form-actions">
-      <button onclick={() => { showNoRemotesError = false; }}>{t('common.cancel')}</button>
-      <button class="primary" onclick={() => { showNoRemotesError = false; showAddRemote = true; }}>{t('toolbar.addRemote')}</button>
-    </div>
-  </Modal>
+  <NoRemotesErrorModal
+    onClose={() => { showNoRemotesError = false; }}
+    onAddRemote={() => { showNoRemotesError = false; showAddRemote = true; }}
+  />
 {/if}
 
 <style>
@@ -555,13 +552,6 @@
     height: 18px;
     background: var(--border-color);
     margin: 0 4px;
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 16px;
   }
 
   .flow-wrapper {

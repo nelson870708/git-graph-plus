@@ -8,9 +8,10 @@
   import { requestDirtyState } from '../../lib/utils/dirty-check';
   import ContextMenu from '../common/ContextMenu.svelte';
   import InteractiveRebase from '../rebase/InteractiveRebase.svelte';
-  import Modal from '../common/Modal.svelte';
   import ColorSelect from '../common/ColorSelect.svelte';
   import PullAfterCheckoutModal from '../modals/PullAfterCheckoutModal.svelte';
+  import FastForwardModal from '../modals/FastForwardModal.svelte';
+  import WorktreeBlockedModal from '../modals/WorktreeBlockedModal.svelte';
   import RebaseBranchModal from '../modals/RebaseBranchModal.svelte';
   import CherryPickModal from '../modals/CherryPickModal.svelte';
   import RevertModal from '../modals/RevertModal.svelte';
@@ -1167,28 +1168,19 @@
 {/if}
 
 {#if showFastForwardModal}
-  <Modal title={t('fastForward.title')} onClose={() => { showFastForwardModal = false; }}>
-    <p class="modal-desc">{t('fastForward.desc')}</p>
-    <div class="modal-context-card">
-      <span class="modal-label">{t('fastForward.switchTo')}</span>
-      <span use:tooltip={fastForwardLocalBranch} class="modal-pill modal-pill--source"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{fastForwardLocalBranch}</span></span>
-    </div>
-    <div class="modal-context-card">
-      <span class="modal-label">{t('fastForward.fastForwardTo')}</span>
-      <span use:tooltip={fastForwardRemote} class="modal-pill modal-pill--target"><i class="codicon codicon-cloud"></i><span class="modal-pill-text">{fastForwardRemote}</span></span>
-    </div>
-    <div class="form-actions">
-      <button onclick={() => { showFastForwardModal = false; }}>{t('common.cancel')}</button>
-      <button class="primary" onclick={() => {
-        showFastForwardModal = false;
-        const local = fastForwardLocalBranch;
-        const remote = fastForwardRemote;
-        const dp = { ...pendingCheckoutDirtyPayload };
-        pendingCheckoutDirtyPayload = {};
-        vscode.postMessage({ type: 'fastForward', payload: { local, remote, ...dp } });
-      }}>{t('fastForward.title')}</button>
-    </div>
-  </Modal>
+  <FastForwardModal
+    localBranch={fastForwardLocalBranch}
+    remote={fastForwardRemote}
+    onClose={() => { showFastForwardModal = false; }}
+    onConfirm={() => {
+      showFastForwardModal = false;
+      const local = fastForwardLocalBranch;
+      const remote = fastForwardRemote;
+      const dp = { ...pendingCheckoutDirtyPayload };
+      pendingCheckoutDirtyPayload = {};
+      vscode.postMessage({ type: 'fastForward', payload: { local, remote, ...dp } });
+    }}
+  />
 {/if}
 
 {#if showPullAfterCheckoutModal}
@@ -1202,20 +1194,15 @@
 {/if}
 
 {#if showWorktreeBlockedModal}
-  <Modal title={t('checkout.worktreeBlockedTitle')} onClose={() => { showWorktreeBlockedModal = false; }}>
-    <p class="modal-desc">{t('checkout.worktreeBlockedDesc')}</p>
-    <div class="modal-context-card">
-      <span use:tooltip={worktreeBlockedRef} class="modal-pill modal-pill--target"><i class="codicon codicon-git-branch"></i><span class="modal-pill-text">{worktreeBlockedRef}</span></span>
-    </div>
-    <div class="modal-context-card">
-      <i class="codicon codicon-worktree" style="color: var(--text-secondary);"></i>
-      <span style="font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; color: var(--text-secondary); word-break: break-all;">{worktreeBlockedPath}</span>
-    </div>
-    <div class="form-actions">
-      <button class="primary" onclick={() => { vscode.postMessage({ type: 'openWorktreeInNewWindow', payload: { path: worktreeBlockedAbsPath } }); showWorktreeBlockedModal = false; }}>{t('checkout.openInNewWindow')}</button>
-      <button onclick={() => { showWorktreeBlockedModal = false; }}>{t('common.close')}</button>
-    </div>
-  </Modal>
+  <WorktreeBlockedModal
+    branchRef={worktreeBlockedRef}
+    displayPath={worktreeBlockedPath}
+    onClose={() => { showWorktreeBlockedModal = false; }}
+    onOpenInNewWindow={() => {
+      vscode.postMessage({ type: 'openWorktreeInNewWindow', payload: { path: worktreeBlockedAbsPath } });
+      showWorktreeBlockedModal = false;
+    }}
+  />
 {/if}
 
 <style>
@@ -1692,13 +1679,6 @@
   :global(body.vscode-light) .commit-row.bisect-culprit {
     background: rgba(200, 100, 0, 0.08);
     box-shadow: inset 3px 0 0 #e65100;
-  }
-
-  /* ---- Modal styles ---- */
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
   }
 
 </style>
