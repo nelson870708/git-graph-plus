@@ -207,3 +207,57 @@ describe('buildFullGraph remote-tip detection', () => {
     expect(graph.dots[5].remoteTip).toBe(false); // 3f (local branch)
   });
 });
+
+describe('buildFullGraph merge-parent path reuse', () => {
+  it('reuses existing path via link when merge parent is already tracked', () => {
+    // Topology (newest first):
+    //   N (parents [B])         — keeps B's path alive after the merge
+    //   M (parents [A, B])      — merge; B is the secondary parent
+    //   A (parents [X])
+    //   B (parents [X])
+    //   X (root)
+    //
+    // When M is processed, N has already inserted B's path into nextMap.
+    // The builder should emit a LINK from M back to that existing path
+    // instead of spawning a duplicate path for B.
+    const commits = [
+      makeCommit('N', ['B']),
+      makeCommit('M', ['A', 'B']),
+      makeCommit('A', ['X']),
+      makeCommit('B', ['X']),
+      makeCommit('X', []),
+    ];
+    const graph = buildFullGraph(commits);
+    const mDot = graph.dots[1];
+    const linksFromM = graph.links.filter(l =>
+      l.start.x === mDot.center.x && l.start.y === mDot.center.y
+    );
+    // One link from M to B's already-tracked path.
+    expect(linksFromM.length).toBeGreaterThanOrEqual(1);
+    // The link must terminate at a different column than M (B's path is
+    // a separate rail). A horizontal-only link would mean we created a
+    // fresh path instead of pointing at the existing one.
+    expect(linksFromM.some(l => l.end.x !== mDot.center.x)).toBe(true);
+  });
+});
+
+describe('buildFullGraph color palette exhaustion', () => {
+  it('recycles colors deterministically when palette is exhausted', () => {
+    // The palette has 12 colors. An octopus merge with 14 parents forces
+    // pickColor to fall through its loop and return 0. The test just needs
+    // to confirm: (a) all assigned colors stay within palette bounds, and
+    // (b) at least one color repeats once the palette is exhausted.
+    const parents = Array.from({ length: 14 }, (_, i) => `p${i + 1}`);
+    const commits = [
+      makeCommit('M', parents),
+      ...parents.map(p => makeCommit(p, [])),
+    ];
+    const graph = buildFullGraph(commits);
+    for (const path of graph.paths) {
+      expect(path.color).toBeGreaterThanOrEqual(0);
+      expect(path.color).toBeLessThan(12);
+    }
+    const colors = graph.paths.map(p => p.color);
+    expect(new Set(colors).size).toBeLessThan(colors.length);
+  });
+});

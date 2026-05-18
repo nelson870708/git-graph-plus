@@ -906,4 +906,117 @@ describe('GitService', () => {
       await expect(service.lsTree('HEAD', '-O')).rejects.toThrow("must not start with '-'");
     });
   });
+
+  describe('assertSafePath invalid input', () => {
+    it('stageFile rejects empty filePath', async () => {
+      await expect(service.stageFile('')).rejects.toThrow('Invalid path');
+    });
+  });
+
+  describe('addRemote URL validation', () => {
+    it('rejects empty URL', async () => {
+      await expect(service.addRemote('origin', '')).rejects.toThrow('Invalid remote URL');
+    });
+
+    it('rejects URL with control characters', async () => {
+      await expect(service.addRemote('origin', 'https://x.com/\x00evil'))
+        .rejects.toThrow('control characters');
+    });
+
+    it('rejects file:// scheme (path injection vector)', async () => {
+      await expect(service.addRemote('origin', 'file:///etc/passwd'))
+        .rejects.toThrow('Unsupported remote URL scheme');
+    });
+
+    it('rejects bare string without scheme', async () => {
+      await expect(service.addRemote('origin', 'just-a-string'))
+        .rejects.toThrow('Unsupported remote URL');
+    });
+
+    it('accepts SSH shorthand (user@host:path)', async () => {
+      mockExec(service, async () => '');
+      await expect(service.addRemote('origin', 'git@github.com:foo/bar.git'))
+        .resolves.toBeUndefined();
+    });
+
+    it('accepts https scheme', async () => {
+      mockExec(service, async () => '');
+      await expect(service.addRemote('origin', 'https://github.com/foo/bar.git'))
+        .resolves.toBeUndefined();
+    });
+  });
+
+  describe('worktreeAdd argument ordering', () => {
+    it('places start-point ref after the path when both branch and newBranch are given', async () => {
+      // `git worktree add -b <newBranch> <path> <branch>` creates <newBranch>
+      // pointing at <branch> as the start point. The trailing ref must stay
+      // after the path or git interprets it as the path.
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+      await service.worktreeAdd('/tmp/wt', 'origin/main', 'feature');
+      expect(calls[0]).toEqual(['worktree', 'add', '-b', 'feature', '/tmp/wt', 'origin/main']);
+    });
+
+    it('omits -b when only branch is given (checkout existing branch)', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+      await service.worktreeAdd('/tmp/wt', 'main');
+      expect(calls[0]).toEqual(['worktree', 'add', '/tmp/wt', 'main']);
+    });
+  });
+
+  describe('flowInit develop branch bootstrap', () => {
+    const flowOpts = {
+      productionBranch: 'main',
+      developBranch: 'develop',
+      featurePrefix: 'feature/',
+      releasePrefix: 'release/',
+      hotfixPrefix: 'hotfix/',
+      versionTagPrefix: 'v',
+    };
+
+    it('creates develop branch from production when develop is missing', async () => {
+      const calls: string[][] = [];
+      let revParseCount = 0;
+      mockExec(service, async (args) => {
+        calls.push(args);
+        if (args[0] === 'rev-parse') {
+          revParseCount++;
+          // 1st: verify production (succeeds). 2nd: verify develop (fails).
+          if (revParseCount === 1) return 'abc123';
+          throw new GitError("unknown revision 'develop'", 1, args);
+        }
+        return '';
+      });
+
+      await service.flowInit(flowOpts);
+
+      const branchCreate = calls.find(c => c[0] === 'branch');
+      expect(branchCreate).toEqual(['branch', 'develop', 'main']);
+    });
+
+    it('skips develop creation when develop already exists', async () => {
+      const calls: string[][] = [];
+      mockExec(service, async (args) => {
+        calls.push(args);
+        if (args[0] === 'rev-parse') return 'abc123';
+        return '';
+      });
+
+      await service.flowInit(flowOpts);
+
+      const branchCreate = calls.find(c => c[0] === 'branch');
+      expect(branchCreate).toBeUndefined();
+    });
+
+    it('throws a helpful error when production branch is missing', async () => {
+      mockExec(service, async (args) => {
+        if (args[0] === 'rev-parse') throw new GitError('not found', 1, args);
+        return '';
+      });
+
+      await expect(service.flowInit(flowOpts))
+        .rejects.toThrow("Branch 'main' does not exist");
+    });
+  });
 });
