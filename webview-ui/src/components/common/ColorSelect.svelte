@@ -21,7 +21,16 @@
   let btnEl: HTMLButtonElement | undefined = $state();
   let dropdownStyle = $state('');
 
-  let current = $derived(options.find(o => o.value === value) ?? options[0]);
+  // Callers can momentarily pass an empty options array — e.g., a parent
+  // component that opens a modal before its store data lands, or a teardown
+  // race where the source list is cleared while the dropdown is still
+  // unmounting. Fall back to a placeholder so the template can render without
+  // crashing on `current.icon` / `current.label`.
+  let current = $derived(
+    options.find(o => o.value === value)
+      ?? options[0]
+      ?? { value: '', label: '', color: '' }
+  );
 
   function toggle() {
     if (open) {
