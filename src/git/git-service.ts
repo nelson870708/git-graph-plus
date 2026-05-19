@@ -253,7 +253,7 @@ export class GitService {
   async log(options?: LogOptions): Promise<Commit[]> {
     const args = [
       'log',
-      '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+      '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
     ];
 
     if (options?.branches && options.branches.length > 0) {
@@ -308,7 +308,7 @@ export class GitService {
         try {
           const stashRaw = await this.exec([
             'log', '--no-walk',
-            '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+            '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
             ...stashHashes,
           ]);
           const stashCommits = parseLog(stashRaw, remoteNames);
@@ -422,7 +422,7 @@ export class GitService {
 
   async tags(): Promise<TagInfo[]> {
     const raw = await this.exec([
-      'tag', '-l', '--sort=-creatordate', '--format=%(refname:short)%00%(if)%(*objectname:short)%(then)%(*objectname:short)%(else)%(objectname:short)%(end)%00%(objecttype)%00%(contents:subject)%00%(contents:body)%01',
+      'tag', '-l', '--sort=-creatordate', '--format=%(refname:short)%00%(if)%(*objectname:short)%(then)%(*objectname:short)%(else)%(objectname:short)%(end)%00%(objecttype)%00%(contents:subject)%00%(contents:body)%01%02%03',
     ]);
     return parseTags(raw);
   }
@@ -1042,7 +1042,7 @@ export class GitService {
     this.assertSafeRef(base, 'log');
     const args = [
       'log',
-      '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+      '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
       '--topo-order',
       '--reverse',
       `${base}..HEAD`,
@@ -1214,7 +1214,7 @@ export class GitService {
 
     const args = [
       'log',
-      '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+      '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
       '--all',
       '--topo-order',
       `--max-count=${options?.limit ?? 200}`,
@@ -1241,7 +1241,7 @@ export class GitService {
   async searchByFile(filePath: string, limit: number = 100): Promise<Commit[]> {
     const args = [
       'log',
-      '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+      '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
       '--all',
       `--max-count=${limit}`,
       '--',
@@ -1257,7 +1257,7 @@ export class GitService {
       this.assertSafeRef(hash, 'log');
       const args = [
         'log',
-        '--format=%x01%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+        '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
         '-1',
         hash,
       ];

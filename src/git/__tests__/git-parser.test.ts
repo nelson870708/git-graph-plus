@@ -9,7 +9,7 @@ describe('parseLog', () => {
   });
 
   it('should parse a single commit', () => {
-    const raw = '\x01abc123def456\x00abc123d\x00Alice\x00alice@example.com\x002024-01-15T10:30:00+09:00\x00Alice\x00alice@example.com\x002024-01-15T10:30:00+09:00\x00Initial commit\x00\x00';
+    const raw = '\x01\x02\x03abc123def456\x00abc123d\x00Alice\x00alice@example.com\x002024-01-15T10:30:00+09:00\x00Alice\x00alice@example.com\x002024-01-15T10:30:00+09:00\x00Initial commit\x00\x00';
     const result = parseLog(raw);
 
     expect(result).toHaveLength(1);
@@ -23,8 +23,8 @@ describe('parseLog', () => {
 
   it('should parse multiple commits', () => {
     const raw =
-      '\x01aaa111\x00aaa\x00Alice\x00a@x.com\x002024-01-02\x00Alice\x00a@x.com\x002024-01-02\x00Second commit\x00bbb222\x00' +
-      '\x01bbb222\x00bbb\x00Bob\x00b@x.com\x002024-01-01\x00Bob\x00b@x.com\x002024-01-01\x00First commit\x00\x00';
+      '\x01\x02\x03aaa111\x00aaa\x00Alice\x00a@x.com\x002024-01-02\x00Alice\x00a@x.com\x002024-01-02\x00Second commit\x00bbb222\x00' +
+      '\x01\x02\x03bbb222\x00bbb\x00Bob\x00b@x.com\x002024-01-01\x00Bob\x00b@x.com\x002024-01-01\x00First commit\x00\x00';
     const result = parseLog(raw);
 
     expect(result).toHaveLength(2);
@@ -35,7 +35,7 @@ describe('parseLog', () => {
   });
 
   it('should parse merge commit with multiple parents', () => {
-    const raw = '\x01merge1\x00mer\x00Alice\x00a@x.com\x002024-01-03\x00Alice\x00a@x.com\x002024-01-03\x00Merge branch\x00parent1 parent2\x00';
+    const raw = '\x01\x02\x03merge1\x00mer\x00Alice\x00a@x.com\x002024-01-03\x00Alice\x00a@x.com\x002024-01-03\x00Merge branch\x00parent1 parent2\x00';
     const result = parseLog(raw);
 
     expect(result).toHaveLength(1);
@@ -43,7 +43,7 @@ describe('parseLog', () => {
   });
 
   it('should parse refs with known remotes', () => {
-    const raw = '\x01abc123\x00abc\x00Alice\x00a@x.com\x002024-01-01\x00Alice\x00a@x.com\x002024-01-01\x00Commit\x00\x00HEAD -> main, origin/main, tag: v1.0';
+    const raw = '\x01\x02\x03abc123\x00abc\x00Alice\x00a@x.com\x002024-01-01\x00Alice\x00a@x.com\x002024-01-01\x00Commit\x00\x00HEAD -> main, origin/main, tag: v1.0';
     const result = parseLog(raw, ['origin']);
 
     expect(result[0].refs).toHaveLength(3);
@@ -150,7 +150,7 @@ describe('parseTags', () => {
   });
 
   it('should parse lightweight tag', () => {
-    const raw = 'v1.0\x00abc1234\x00commit\x00\x00\x01';
+    const raw = 'v1.0\x00abc1234\x00commit\x00\x00\x01\x02\x03';
     const result = parseTags(raw);
 
     expect(result).toHaveLength(1);
@@ -160,7 +160,7 @@ describe('parseTags', () => {
   });
 
   it('should parse annotated tag with subject only', () => {
-    const raw = 'v2.0\x00def5678\x00tag\x00Release 2.0\x00\x01';
+    const raw = 'v2.0\x00def5678\x00tag\x00Release 2.0\x00\x01\x02\x03';
     const result = parseTags(raw);
 
     expect(result).toHaveLength(1);
@@ -170,7 +170,7 @@ describe('parseTags', () => {
   });
 
   it('should parse annotated tag with subject and body', () => {
-    const raw = 'v3.0\x00aaa1111\x00tag\x00Release 3.0\x00Bug fixes\nPerformance improvements\x01';
+    const raw = 'v3.0\x00aaa1111\x00tag\x00Release 3.0\x00Bug fixes\nPerformance improvements\x01\x02\x03';
     const result = parseTags(raw);
 
     expect(result).toHaveLength(1);
@@ -178,7 +178,7 @@ describe('parseTags', () => {
   });
 
   it('should parse multiple tags', () => {
-    const raw = 'v1.0\x00abc1234\x00commit\x00\x00\x01v2.0\x00def5678\x00tag\x00Release 2.0\x00\x01';
+    const raw = 'v1.0\x00abc1234\x00commit\x00\x00\x01\x02\x03v2.0\x00def5678\x00tag\x00Release 2.0\x00\x01\x02\x03';
     const result = parseTags(raw);
 
     expect(result).toHaveLength(2);

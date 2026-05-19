@@ -326,7 +326,7 @@ describe('GitService', () => {
   });
 
   describe('log() uncommitted node injection', () => {
-    const logLine = '\x01abc123\x00abc\x00Author\x00a@a.com\x002024-01-01T00:00:00Z\x00Author\x00a@a.com\x002024-01-01T00:00:00Z\x00feat: initial\x00\x00\x00\n';
+    const logLine = '\x01\x02\x03abc123\x00abc\x00Author\x00a@a.com\x002024-01-01T00:00:00Z\x00Author\x00a@a.com\x002024-01-01T00:00:00Z\x00feat: initial\x00\x00\x00\n';
 
     it('prepends UNCOMMITTED commit when porcelain has output', async () => {
       mockExec(service, async (args) => {

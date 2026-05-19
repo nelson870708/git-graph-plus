@@ -441,7 +441,7 @@ describe('GitService — log() with stashes', () => {
     hash: string, abbr: string, subject: string, parents: string,
   ): string {
     const F = '\x00';
-    return `\x01${hash}${F}${abbr}${F}A${F}a@x.com${F}2024-01-01${F}A${F}a@x.com${F}2024-01-01${F}${subject}${F}${parents}${F}${F}`;
+    return `\x01\x02\x03${hash}${F}${abbr}${F}A${F}a@x.com${F}2024-01-01${F}A${F}a@x.com${F}2024-01-01${F}${subject}${F}${parents}${F}${F}`;
   }
 
   // Stash list format: %gd %x00 %gs %x00 %aI %x00 %P %x00 %H
@@ -550,7 +550,7 @@ describe('GitService — log() uncommitted porcelain branches', () => {
 
   function record() {
     const F = '\x00';
-    return `\x01c1${F}c1${F}A${F}a@x.com${F}2024-01-01${F}A${F}a@x.com${F}2024-01-01${F}only${F}${F}${F}`;
+    return `\x01\x02\x03c1${F}c1${F}A${F}a@x.com${F}2024-01-01${F}A${F}a@x.com${F}2024-01-01${F}only${F}${F}${F}`;
   }
 
   it('prepends an UNCOMMITTED entry when porcelain shows staged and unstaged changes', async () => {

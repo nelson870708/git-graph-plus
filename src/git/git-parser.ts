@@ -1,6 +1,11 @@
 import type { Commit, Ref, BranchInfo, TagInfo, RemoteInfo, StashEntry, DiffData, DiffHunk, DiffLine, WorktreeInfo } from './types';
 
-const RECORD_SEP = '\x01';
+// 3-byte sentinel for record boundaries. A single \x01 can be embedded in
+// commit subjects/bodies and tag messages by any contributor (`git commit -m`
+// preserves arbitrary unicode), which would split one record into two phantom
+// records. Three control bytes in a row are effectively impossible to type
+// and never appear in normal git output, so this is collision-free.
+const RECORD_SEP = '\x01\x02\x03';
 const FIELD_SEP = '\x00';
 
 export function parseLog(raw: string, remoteNames?: string[]): Commit[] {

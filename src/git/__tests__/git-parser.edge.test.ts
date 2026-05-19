@@ -32,21 +32,38 @@ describe('parseRefs — edge cases', () => {
 
 describe('parseLog — edge cases', () => {
   it('record without refs field produces empty refs array', () => {
-    const raw = '\x01h\x00h\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00msg\x00\x00';
+    const raw = '\x01\x02\x03h\x00h\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00msg\x00\x00';
     const result = parseLog(raw);
     expect(result[0].refs).toEqual([]);
   });
 
   it('record with whitespace-only refs field produces empty refs array', () => {
-    const raw = '\x01h\x00h\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00msg\x00\x00   ';
+    const raw = '\x01\x02\x03h\x00h\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00msg\x00\x00   ';
     const result = parseLog(raw);
     expect(result[0].refs).toEqual([]);
   });
 
   it('parses commit body when present', () => {
-    const raw = '\x01h\x00h\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00subject\x00\x00\x00body line\n\nmore';
+    const raw = '\x01\x02\x03h\x00h\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00subject\x00\x00\x00body line\n\nmore';
     const result = parseLog(raw);
     expect(result[0].body).toBe('body line\n\nmore');
+  });
+
+  it('does not split a record when commit subject or body contains a stray \\x01', () => {
+    // A contributor can put any unicode (including 0x01) in a commit subject
+    // or body. The 3-byte sentinel \x01\x02\x03 must not be confused with
+    // a lone \x01 in arbitrary content.
+    const subjectWithSep = 'subject with \x01 inside';
+    const bodyWithSep = 'body has \x01 byte and \x01 again';
+    const raw =
+      `\x01\x02\x03h1\x00h1\x00A\x00a@x.com\x002024-01-01\x00A\x00a@x.com\x002024-01-01\x00${subjectWithSep}\x00\x00\x00${bodyWithSep}` +
+      `\x01\x02\x03h2\x00h2\x00B\x00b@x.com\x002024-01-02\x00B\x00b@x.com\x002024-01-02\x00second\x00h1\x00\x00`;
+    const result = parseLog(raw);
+    expect(result).toHaveLength(2);
+    expect(result[0].subject).toBe(subjectWithSep);
+    expect(result[0].body).toBe(bodyWithSep);
+    expect(result[1].hash).toBe('h2');
+    expect(result[1].parents).toEqual(['h1']);
   });
 });
 
@@ -77,7 +94,7 @@ describe('parseBranches — edge cases', () => {
 describe('parseTags — edge cases', () => {
   it('annotated tag with body but no subject becomes undefined message', () => {
     // body-only is treated like no subject → no message
-    const raw = 'v1\x00h\x00tag\x00\x00body only\x01';
+    const raw = 'v1\x00h\x00tag\x00\x00body only\x01\x02\x03';
     expect(parseTags(raw)[0].message).toBeUndefined();
   });
 });
@@ -177,14 +194,14 @@ describe('parseWorktreeList — edge cases', () => {
 describe('parseLog — defensive field fallbacks', () => {
   it('handles a record with all fields missing (every ?? "" branch)', () => {
     // RECORD_SEP only, no FIELD_SEP — fields[1..11] are undefined
-    const raw = '\x01';
+    const raw = '\x01\x02\x03';
     const result = parseLog(raw);
     // Empty trimmed record is filtered out by parseLog
     expect(result).toEqual([]);
   });
 
   it('handles a record with only a hash (rest of fields undefined)', () => {
-    const raw = '\x01abc123';
+    const raw = '\x01\x02\x03abc123';
     const result = parseLog(raw);
     expect(result[0].hash).toBe('abc123');
     expect(result[0].abbreviatedHash).toBe('');
@@ -197,7 +214,7 @@ describe('parseLog — defensive field fallbacks', () => {
   });
 
   it('strips trailing whitespace from hash field', () => {
-    const raw = '\x01  hashy  \x00short\x00';
+    const raw = '\x01\x02\x03  hashy  \x00short\x00';
     expect(parseLog(raw)[0].hash).toBe('hashy');
   });
 });
