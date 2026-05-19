@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GitService, GitError } from '../git-service';
+import { GitService, GitError, binCommitTime } from '../git-service';
 
 // Access private exec method via prototype for mocking
 function mockExec(service: GitService, fn: (args: string[]) => Promise<string>) {
@@ -700,6 +700,30 @@ describe('GitService', () => {
       await service.log({ skip: 50 }).catch(() => {});
       const logCall = calls.find(c => c[0] === 'log' && !c.includes('--no-walk'));
       expect(logCall).toContain('--skip=50');
+    });
+  });
+
+  describe('binCommitTime', () => {
+    it("uses the author's wall-clock hour, not the host's", () => {
+      // %aI emits "YYYY-MM-DDTHH:mm:ss+HH:MM". A 10am commit in +09:00 must
+      // bin to hour 10 whether the host is in UTC, JST, or PST.
+      expect(binCommitTime('2024-01-15T10:30:00+09:00')).toEqual({ weekday: 1, hour: 10 });
+      // 10am UTC binned the same way (Date.UTC trick gives consistent weekday).
+      expect(binCommitTime('2024-01-15T10:30:00Z')).toEqual({ weekday: 1, hour: 10 });
+      // 22:00 in PST (-08:00) — should bin to hour 22, not the converted hour.
+      expect(binCommitTime('2024-01-15T22:30:00-08:00')).toEqual({ weekday: 1, hour: 22 });
+    });
+
+    it('computes day-of-week from the calendar date', () => {
+      // 2024-01-01 is a Monday (weekday=1). Independent of timezone.
+      expect(binCommitTime('2024-01-01T00:00:00+00:00')?.weekday).toBe(1);
+      // 2024-01-07 is a Sunday (weekday=0).
+      expect(binCommitTime('2024-01-07T12:00:00+00:00')?.weekday).toBe(0);
+    });
+
+    it('returns null on malformed input', () => {
+      expect(binCommitTime('garbage')).toBeNull();
+      expect(binCommitTime('')).toBeNull();
     });
   });
 

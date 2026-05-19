@@ -18,6 +18,30 @@ export class GitError extends Error {
   }
 }
 
+/**
+ * Bin an ISO-8601 timestamp (`%aI` from `git log`) by the *author's* local
+ * weekday and hour, not the host's. `new Date(iso).getDay()/getHours()` would
+ * convert into the machine's timezone — a 10am Seoul commit would land in
+ * "evening" for someone running the extension in San Francisco. The ISO string
+ * already encodes the wall-clock time and offset, so the easy fix is to parse
+ * the date components directly.
+ */
+export function binCommitTime(iso: string): { weekday: number; hour: number } | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, y, mo, day, h] = m;
+  const year = parseInt(y, 10);
+  const month = parseInt(mo, 10);
+  const date = parseInt(day, 10);
+  const hour = parseInt(h, 10);
+  if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(date) || Number.isNaN(hour)) return null;
+  // Day-of-week is independent of timezone if we treat the components as UTC,
+  // because the same calendar date (Y/M/D in the author's zone) always has the
+  // same day-of-week regardless of the offset.
+  const weekday = new Date(Date.UTC(year, month - 1, date)).getUTCDay();
+  return { weekday, hour };
+}
+
 export class GitService {
   private activityLog: Array<{ command: string; timestamp: string; success: boolean; duration: number }> = [];
   private cachedRemoteNames: string[] | null = null;
@@ -1503,8 +1527,9 @@ export class GitService {
     if (!raw.trim()) { return []; }
     const grid = new Map<string, number>();
     for (const line of raw.trim().split('\n').filter(Boolean)) {
-      const d = new Date(line.trim());
-      const key = `${d.getDay()}-${d.getHours()}`;
+      const bin = binCommitTime(line.trim());
+      if (!bin) continue;
+      const key = `${bin.weekday}-${bin.hour}`;
       grid.set(key, (grid.get(key) ?? 0) + 1);
     }
     return Array.from(grid.entries()).map(([key, count]) => {
