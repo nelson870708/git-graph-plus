@@ -655,7 +655,15 @@ export class GitService {
     await this.exec(['branch', '-m', oldName, newName]);
   }
 
-  private mergeTreeCheck(ours: string, theirs: string, mergeBase?: string): Promise<{ hasConflict: boolean; files: string[] }> {
+  /** Tagged result so callers can distinguish "old git doesn't accept
+   *  --merge-base" (one-time capability probe, permanent fallback) from
+   *  "this particular call failed with a bad ref / missing object"
+   *  (transient, must not poison the capability flag). */
+  private mergeTreeCheck(ours: string, theirs: string, mergeBase?: string): Promise<
+    | { kind: 'ok'; value: { hasConflict: boolean; files: string[] } }
+    | { kind: 'unknown-option' }
+    | { kind: 'error' }
+  > {
     const args = mergeBase
       ? ['merge-tree', '--write-tree', `--merge-base=${mergeBase}`, ours, theirs]
       : ['merge-tree', '--write-tree', ours, theirs];
@@ -664,7 +672,7 @@ export class GitService {
         cwd: this.repoPath,
         env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' },
       });
-      const timer = setTimeout(() => { proc.kill('SIGTERM'); resolve({ hasConflict: false, files: [] }); }, 15000);
+      const timer = setTimeout(() => { proc.kill('SIGTERM'); resolve({ kind: 'error' }); }, 15000);
       let stdout = '';
       let stderr = '';
       proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
@@ -672,11 +680,11 @@ export class GitService {
       proc.on('close', (code) => {
         clearTimeout(timer);
         if (code === 0) {
-          resolve({ hasConflict: false, files: [] });
+          resolve({ kind: 'ok', value: { hasConflict: false, files: [] } });
           return;
         }
         if (stderr.includes('unknown option') || stderr.includes('unrecognized argument')) {
-          resolve(null as unknown as { hasConflict: boolean; files: string[] });
+          resolve({ kind: 'unknown-option' });
           return;
         }
         // git merge-tree exits 1 on a real conflict (with CONFLICT lines on
@@ -688,20 +696,18 @@ export class GitService {
           .map(l => l.match(/in (.+)$/)?.[1])
           .filter((f): f is string => !!f);
         if (code === 1 && files.length > 0) {
-          resolve({ hasConflict: true, files });
+          resolve({ kind: 'ok', value: { hasConflict: true, files } });
           return;
         }
         if (code === 1 && stdout.includes('CONFLICT')) {
           // Conflict signaled but path could not be parsed — still surface.
-          resolve({ hasConflict: true, files: [] });
+          resolve({ kind: 'ok', value: { hasConflict: true, files: [] } });
           return;
         }
-        // Anything else is an error (invalid ref, missing object, OOM, ...).
-        // Returning null lets the caller fall back to a no-mergeBase retry
-        // when supported, or signal "no prediction available" to the UI.
-        resolve(null as unknown as { hasConflict: boolean; files: string[] });
+        // Anything else is a transient error (invalid ref, missing object, OOM).
+        resolve({ kind: 'error' });
       });
-      proc.on('error', () => { clearTimeout(timer); resolve({ hasConflict: false, files: [] }); });
+      proc.on('error', () => { clearTimeout(timer); resolve({ kind: 'error' }); });
     });
   }
 
@@ -712,18 +718,23 @@ export class GitService {
 
     if (mergeBase && this.mergeBaseSupported !== false) {
       const result = await this.mergeTreeCheck(ours, theirs, mergeBase);
-      if (result !== null) {
+      if (result.kind === 'ok') {
         this.mergeBaseSupported = true;
-        return result;
+        return result.value;
       }
-      this.mergeBaseSupported = false;
+      if (result.kind === 'unknown-option') {
+        // Old git (<2.40) — permanently fall back to the no-mergeBase form
+        // for the lifetime of this service.
+        this.mergeBaseSupported = false;
+      }
+      // For 'error' (bad ref / missing object / timeout) leave the flag
+      // alone and let the no-mergeBase fallback try; one transient failure
+      // must not disable per-commit isolation forever.
     }
     const fallback = await this.mergeTreeCheck(ours, theirs);
-    // Either branch returning null now means a real merge-tree error (bad
-    // ref, missing object, etc.) rather than just "unknown option" — there
-    // is no useful conflict prediction to give. Report "no conflict known"
-    // so the UI surfaces a benign banner instead of a phantom warning.
-    return fallback ?? { hasConflict: false, files: [] };
+    return fallback.kind === 'ok'
+      ? fallback.value
+      : { hasConflict: false, files: [] };
   }
 
   private mergeBaseSupported: boolean | null = null;
@@ -738,7 +749,8 @@ export class GitService {
     try {
       mergeBase = (await this.exec(['merge-base', onto, branch], { silent: true })).trim();
     } catch {
-      return (await this.mergeTreeCheck(onto, branch)) ?? noPrediction;
+      const r = await this.mergeTreeCheck(onto, branch);
+      return r.kind === 'ok' ? r.value : noPrediction;
     }
 
     let commitList: string[];
@@ -746,7 +758,8 @@ export class GitService {
       commitList = (await this.exec(['log', '--format=%H', '--reverse', `${mergeBase}..${branch}`], { silent: true }))
         .split('\n').filter(Boolean);
     } catch {
-      return (await this.mergeTreeCheck(onto, branch)) ?? noPrediction;
+      const r = await this.mergeTreeCheck(onto, branch);
+      return r.kind === 'ok' ? r.value : noPrediction;
     }
 
     if (commitList.length === 0) return { hasConflict: false, files: [] };
@@ -758,17 +771,22 @@ export class GitService {
       // Try per-commit check (git 2.40+): use C^ as merge base to isolate only this commit's diff
       if (this.mergeBaseSupported !== false) {
         const result = await this.mergeTreeCheck(onto, commit, `${commit}^`);
-        if (result === null) {
+        if (result.kind === 'unknown-option') {
+          // Old git: switch to fallback for the lifetime of the service.
           this.mergeBaseSupported = false;
-        } else {
+        } else if (result.kind === 'ok') {
           this.mergeBaseSupported = true;
-          if (result.hasConflict) result.files.forEach(f => conflictFiles.add(f));
+          if (result.value.hasConflict) result.value.files.forEach(f => conflictFiles.add(f));
           continue;
         }
+        // 'error' (e.g. orphan commit has no parent): fall through to the
+        // cumulative fallback for this commit only.
       }
       // Fallback: cumulative diff from merge base
       const result = await this.mergeTreeCheck(onto, commit);
-      if (result?.hasConflict) result.files.forEach(f => conflictFiles.add(f));
+      if (result.kind === 'ok' && result.value.hasConflict) {
+        result.value.files.forEach(f => conflictFiles.add(f));
+      }
     }
 
     return { hasConflict: conflictFiles.size > 0, files: [...conflictFiles] };
