@@ -1,5 +1,47 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+
+/**
+ * Resolves the real gitdir for `repoPath`. For a regular repo this is just
+ * `repoPath/.git`. For a worktree-linked checkout the `.git` entry is a file
+ * containing `gitdir: <abs-or-rel-path>` pointing at `<main-gitdir>/worktrees/<name>`,
+ * which is where per-worktree refs (HEAD, index, MERGE_HEAD, ...) actually live.
+ *
+ * Returns the per-worktree gitdir plus the commondir (where shared refs live).
+ * Falls back to `<repoPath>/.git` for both on any error so behavior matches
+ * pre-worktree code paths.
+ */
+function resolveGitDirs(repoPath: string): { gitDir: string; commonDir: string } {
+  const dotGit = path.join(repoPath, '.git');
+  let gitDir = dotGit;
+  try {
+    const stat = fs.statSync(dotGit);
+    if (stat.isFile()) {
+      const content = fs.readFileSync(dotGit, 'utf-8').trim();
+      const m = content.match(/^gitdir:\s*(.+)$/);
+      if (m) {
+        const target = m[1].trim();
+        gitDir = path.isAbsolute(target) ? target : path.resolve(repoPath, target);
+      }
+    }
+  } catch {
+    return { gitDir: dotGit, commonDir: dotGit };
+  }
+  // For a linked worktree, gitDir is <main>/worktrees/<name> and a `commondir`
+  // file holds the path to the main gitdir (where refs/packed-refs/config live).
+  let commonDir = gitDir;
+  try {
+    const commonFile = path.join(gitDir, 'commondir');
+    if (fs.existsSync(commonFile)) {
+      const target = fs.readFileSync(commonFile, 'utf-8').trim();
+      commonDir = path.isAbsolute(target) ? target : path.resolve(gitDir, target);
+    }
+  } catch {
+    // ignore — commonDir already defaulted to gitDir
+  }
+  return { gitDir, commonDir };
+}
 
 export class FileWatcher implements vscode.Disposable {
   private watchers: vscode.FileSystemWatcher[] = [];
@@ -9,31 +51,33 @@ export class FileWatcher implements vscode.Disposable {
   private refreshing = false;
   private disposed = false;
   public enabled = true;
+  private gitDir: string;
+  private commonDir: string;
 
   constructor(
     private repoPath: string,
     private onChange: (what: string) => void
   ) {
-    const gitDir = path.join(repoPath, '.git');
+    const resolved = resolveGitDirs(repoPath);
+    this.gitDir = resolved.gitDir;
+    this.commonDir = resolved.commonDir;
 
-    // Only watch specific files that indicate meaningful state changes
-    // HEAD - branch switch, commit
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'HEAD'));
-    // refs - branch/tag create/delete/update
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'refs/**'));
-    // index - staging changes
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'index'));
-    // MERGE_HEAD, REBASE_HEAD - operation status
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'MERGE_HEAD'));
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'REBASE_HEAD'));
-    // stash ref
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'refs/stash'));
-    // packed-refs - updated by fetch/push when refs are packed
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'packed-refs'));
-    // config - updated by git remote add/remove/rename
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'config'));
-    // worktrees - updated by git worktree add/remove
-    this.addWatcher(new vscode.RelativePattern(gitDir, 'worktrees/**'));
+    // Per-worktree paths (gitDir):
+    //   HEAD, index, MERGE_HEAD, REBASE_HEAD live in the per-worktree gitdir
+    //   for linked worktrees, and in `.git` for regular repos (gitDir==commonDir).
+    this.addWatcher(new vscode.RelativePattern(this.gitDir, 'HEAD'));
+    this.addWatcher(new vscode.RelativePattern(this.gitDir, 'index'));
+    this.addWatcher(new vscode.RelativePattern(this.gitDir, 'MERGE_HEAD'));
+    this.addWatcher(new vscode.RelativePattern(this.gitDir, 'REBASE_HEAD'));
+
+    // Shared paths (commonDir):
+    //   refs/, packed-refs, config, worktrees/ are shared across all worktrees
+    //   so we watch them at the main gitdir.
+    this.addWatcher(new vscode.RelativePattern(this.commonDir, 'refs/**'));
+    this.addWatcher(new vscode.RelativePattern(this.commonDir, 'refs/stash'));
+    this.addWatcher(new vscode.RelativePattern(this.commonDir, 'packed-refs'));
+    this.addWatcher(new vscode.RelativePattern(this.commonDir, 'config'));
+    this.addWatcher(new vscode.RelativePattern(this.commonDir, 'worktrees/**'));
 
     // Watch working tree for file changes (exclude heavy dirs via specific patterns)
     // Using {src,lib,app,...}/** would be too restrictive, so we watch ** but filter
@@ -68,8 +112,14 @@ export class FileWatcher implements vscode.Disposable {
   }
 
   private classifyChange(uri: vscode.Uri): string {
-    const gitDir = path.join(this.repoPath, '.git');
-    const relativePath = path.relative(gitDir, uri.fsPath);
+    // Probe against both gitDir (per-worktree) and commonDir (shared) so the
+    // classification works regardless of whether the change was to HEAD/index
+    // (gitDir) or refs/config (commonDir).
+    const fromGitDir = path.relative(this.gitDir, uri.fsPath);
+    const fromCommonDir = path.relative(this.commonDir, uri.fsPath);
+    // Pick the relative path that does NOT start with `..` — that's the dir
+    // the file actually belongs to.
+    const relativePath = !fromGitDir.startsWith('..') ? fromGitDir : fromCommonDir;
 
     if (relativePath === 'HEAD' || relativePath.startsWith('refs') || relativePath === 'packed-refs' || relativePath.startsWith('worktrees')) {
       return 'refs';
