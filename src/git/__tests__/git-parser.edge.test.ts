@@ -279,6 +279,25 @@ not a hunk
     const result = parseDiff(raw);
     expect(result[0].hunks).toEqual([]);
   });
+
+  it('does not append a phantom context line for the trailing newline', () => {
+    // git diff output ends with a newline; splitting on '\n' yields a final
+    // empty string. That artifact must not become a context line in the last
+    // hunk (which would also bump the trailing line numbers by one).
+    const raw = `diff --git a/f.ts b/f.ts
+@@ -1,2 +1,2 @@
+ ctx
+-old
++new
+`;
+    const result = parseDiff(raw);
+    const lines = result[0].hunks[0].lines;
+    expect(lines).toHaveLength(3); // ctx, -old, +new — no trailing empty
+    const last = lines[lines.length - 1];
+    expect(last.type).toBe('add');
+    expect(last.content).toBe('new');
+    expect(last.newLineNumber).toBe(2);
+  });
 });
 
 describe('parseLfsFiles — defensive fallbacks', () => {

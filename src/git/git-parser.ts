@@ -256,7 +256,12 @@ export function parseDiff(raw: string, file?: string): DiffData[] {
           oldLineNumber: oldLineNum,
         });
         oldLineNum++;
-      } else if (line.startsWith(' ') || line === '') {
+      } else if (line.startsWith(' ') || (line === '' && i < lines.length - 1)) {
+        // Context line. A blank context line may arrive as " " (git's normal
+        // output) or, if trailing whitespace was stripped, as "". The final
+        // empty string is always the trailing-newline artifact from split('\n'),
+        // not real content — skip it (`i < lines.length - 1`) so it doesn't
+        // become a phantom context line that also bumps the trailing line numbers.
         currentHunk.lines.push({
           type: 'context',
           content: line.startsWith(' ') ? line.substring(1) : line,
