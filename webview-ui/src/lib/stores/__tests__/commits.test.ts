@@ -80,4 +80,17 @@ describe('commitStore lookups', () => {
   it('getGraphNode returns undefined for unknown hash', () => {
     expect(commitStore.getGraphNode('zzz')).toBeUndefined();
   });
+
+  it('rebuilds lookup indexes when setData is called again (stale entries must vanish)', () => {
+    expect(commitStore.getCommit('aaa')?.hash).toBe('aaa');
+    expect(commitStore.getGraphNode('aaa')?.column).toBe(0);
+    commitStore.setData({
+      commits: [makeCommit('ccc')],
+      graph: [makeNode('ccc', 5)],
+    });
+    expect(commitStore.getCommit('aaa')).toBeUndefined();
+    expect(commitStore.getGraphNode('aaa')).toBeUndefined();
+    expect(commitStore.getCommit('ccc')?.hash).toBe('ccc');
+    expect(commitStore.getGraphNode('ccc')?.column).toBe(5);
+  });
 });

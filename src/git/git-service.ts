@@ -3,6 +3,14 @@ import { existsSync } from 'fs';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+import { bufferStream, BufferOverflowError } from '../utils/buffer-stream';
+
+/** Default max bytes per stdout/stderr stream for a single git invocation.
+ *  Picked to comfortably hold large log/diff output (e.g. `git log --all`
+ *  over a 100k-commit repo with --format flags is ~tens of MB) while still
+ *  preventing a pathological --no-pager binary blob from eating the whole
+ *  extension host. Callers can override per-invocation via `maxBufferBytes`. */
+const DEFAULT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
 import { parseLog, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks } from './git-parser';
 import type { Commit, BranchInfo, TagInfo, RemoteInfo, StashEntry, LogOptions, DiffData, WorktreeInfo } from './types';
 
@@ -229,10 +237,11 @@ export class GitService {
     }
   }
 
-  private exec(args: string[], options?: { stdin?: string; timeout?: number; silent?: boolean }): Promise<string> {
+  private exec(args: string[], options?: { stdin?: string; timeout?: number; silent?: boolean; maxBufferBytes?: number }): Promise<string> {
     const startTime = Date.now();
     const command = `git ${args.join(' ')}`;
     const timeoutMs = options?.timeout ?? 30000;
+    const maxBytes = options?.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES;
 
     return new Promise((resolve, reject) => {
       const proc = spawn('git', args, {
@@ -240,49 +249,66 @@ export class GitService {
         env: { ...process.env, ...this.extraEnv, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', GIT_MERGE_AUTOEDIT: 'no', GIT_EDITOR: 'true', EDITOR: 'true' },
       });
 
-      const timer = setTimeout(() => {
-        proc.kill('SIGTERM');
-        // Force kill if SIGTERM doesn't work after 5s
+      const recordActivity = (success: boolean) => {
+        if (options?.silent) return;
+        const logCommand = command.length > 500 ? command.substring(0, 500) + '…' : command;
+        this.activityLog.unshift({
+          command: logCommand,
+          timestamp: new Date().toISOString(),
+          success,
+          duration: Date.now() - startTime,
+        });
+        if (this.activityLog.length > 200) {
+          this.activityLog.length = 200;
+        }
+      };
+
+      const killHard = () => {
+        try { proc.kill('SIGTERM'); } catch { /* already dead */ }
         setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* already dead */ } }, 5000);
+      };
+
+      const timer = setTimeout(() => {
+        killHard();
+        recordActivity(false);
         reject(new GitError(`Command timed out after ${timeoutMs}ms`, null, args));
       }, timeoutMs);
-
-      const stdoutChunks: Buffer[] = [];
-      const stderrChunks: Buffer[] = [];
 
       if (options?.stdin) {
         proc.stdin.write(options.stdin);
         proc.stdin.end();
       }
 
-      proc.stdout.on('data', (data: Buffer) => {
-        stdoutChunks.push(data);
-      });
-
-      proc.stderr.on('data', (data: Buffer) => {
-        stderrChunks.push(data);
-      });
-
-      proc.on('close', (code) => {
+      // Bound stdout/stderr to prevent a pathological git invocation from
+      // exhausting the extension host's memory. Overflow rejects immediately
+      // and signals the process to terminate.
+      const stdoutP = bufferStream(proc.stdout, maxBytes);
+      const stderrP = bufferStream(proc.stderr, maxBytes);
+      const onOverflow = (label: 'stdout' | 'stderr') => (err: unknown) => {
+        if (!(err instanceof BufferOverflowError)) return;
         clearTimeout(timer);
-        const stdout = Buffer.concat(stdoutChunks).toString();
-        const stderr = Buffer.concat(stderrChunks).toString();
-        const duration = Date.now() - startTime;
-        if (!options?.silent) {
-          // Truncate command for activity log to prevent memory bloat
-          const logCommand = command.length > 500 ? command.substring(0, 500) + '…' : command;
-          this.activityLog.unshift({
-            command: logCommand,
-            timestamp: new Date().toISOString(),
-            success: code === 0,
-            duration,
-          });
-          // Keep last 200 entries
-          if (this.activityLog.length > 200) {
-            this.activityLog.length = 200;
-          }
-        }
+        killHard();
+        recordActivity(false);
+        reject(new GitError(
+          `git ${args[0] ?? ''}: ${label} exceeded ${err.limitBytes} bytes`,
+          null,
+          args,
+        ));
+      };
+      stdoutP.catch(onOverflow('stdout'));
+      stderrP.catch(onOverflow('stderr'));
 
+      proc.on('close', async (code) => {
+        clearTimeout(timer);
+        // If overflow already rejected, these awaits resolve to empty
+        // buffers via the swallow below; the prior reject() wins.
+        const [stdoutBuf, stderrBuf] = await Promise.all([
+          stdoutP.catch(() => Buffer.alloc(0)),
+          stderrP.catch(() => Buffer.alloc(0)),
+        ]);
+        const stdout = stdoutBuf.toString();
+        const stderr = stderrBuf.toString();
+        recordActivity(code === 0);
         if (code === 0) {
           resolve(stdout);
         } else {
@@ -292,14 +318,7 @@ export class GitService {
 
       proc.on('error', (err) => {
         clearTimeout(timer);
-        if (!options?.silent) {
-          this.activityLog.unshift({
-            command,
-            timestamp: new Date().toISOString(),
-            success: false,
-            duration: Date.now() - startTime,
-          });
-        }
+        recordActivity(false);
         reject(new GitError(err.message, null, args));
       });
     });
@@ -1634,26 +1653,32 @@ export class GitService {
   }
 
   async flowFeatureStart(name: string): Promise<string> {
+    this.assertSafeRef(name, 'flow feature start');
     return this.exec(['flow', 'feature', 'start', name]);
   }
 
   async flowFeatureFinish(name: string): Promise<string> {
+    this.assertSafeRef(name, 'flow feature finish');
     return this.exec(['flow', 'feature', 'finish', name]);
   }
 
   async flowReleaseStart(version: string): Promise<string> {
+    this.assertSafeRef(version, 'flow release start');
     return this.exec(['flow', 'release', 'start', version]);
   }
 
   async flowReleaseFinish(version: string): Promise<string> {
+    this.assertSafeRef(version, 'flow release finish');
     return this.exec(['flow', 'release', 'finish', '-m', version, version]);
   }
 
   async flowHotfixStart(version: string): Promise<string> {
+    this.assertSafeRef(version, 'flow hotfix start');
     return this.exec(['flow', 'hotfix', 'start', version]);
   }
 
   async flowHotfixFinish(version: string): Promise<string> {
+    this.assertSafeRef(version, 'flow hotfix finish');
     return this.exec(['flow', 'hotfix', 'finish', '-m', version, version]);
   }
 

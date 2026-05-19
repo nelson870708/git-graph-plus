@@ -13,6 +13,22 @@ class CommitStore {
   currentLimit = $state(0);
   notGitRepo = $state(false);
 
+  // Hash → entry maps derived from the arrays so they auto-rebuild whether
+  // callers replace via setData() or assign `commits` / `graphNodes`
+  // directly (the latter happens in tests and in some webview flows).
+  // O(1) lookups replace the previous O(N) Array.find().
+  private commitByHash = $derived.by(() => {
+    const m = new Map<string, Commit>();
+    for (const c of this.commits) m.set(c.hash, c);
+    return m;
+  });
+
+  private nodeByHash = $derived.by(() => {
+    const m = new Map<string, GraphNode>();
+    for (const n of this.graphNodes) m.set(n.commit, n);
+    return m;
+  });
+
   setData(data: CommitGraphData) {
     this.commits = data.commits;
     this.graphNodes = data.graph;
@@ -36,11 +52,11 @@ class CommitStore {
   }
 
   getCommit(hash: string): Commit | undefined {
-    return this.commits.find((c) => c.hash === hash);
+    return this.commitByHash.get(hash);
   }
 
   getGraphNode(hash: string): GraphNode | undefined {
-    return this.graphNodes.find((n) => n.commit === hash);
+    return this.nodeByHash.get(hash);
   }
 }
 

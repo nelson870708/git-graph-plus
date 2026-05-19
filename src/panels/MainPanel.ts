@@ -9,6 +9,11 @@ import { FileWatcher } from '../services/file-watcher';
 import { resolveGitDirs } from '../services/file-watcher-helpers';
 import { RepoDiscoveryService, RepoInfo } from '../services/repo-discovery';
 import type { WebviewMessage } from '../utils/message-bus';
+import {
+  resolveRepoRelativePath as resolveRepoRelativePathUtil,
+  assertSafeArgPath as assertSafeArgPathUtil,
+} from '../utils/path-validation';
+import { SequenceGuard } from '../utils/sequence-guard';
 
 export class MainPanel {
   public static currentPanel: MainPanel | undefined;
@@ -30,6 +35,7 @@ export class MainPanel {
   private isFirstGetLog = true;
   private logSequence = 0;
   private searchSequence = 0;
+  private diffSequence = new SequenceGuard();
   private cachedRepos: RepoInfo[] = [];
   private disposed = false;
   public static onSidebarRefresh: (() => void) | null = null;
@@ -55,33 +61,12 @@ export class MainPanel {
     }
   }
 
-  /** Resolve a webview-supplied repo-relative path and assert it stays inside
-   *  the repository root. Throws on traversal attempts (`../etc/passwd`) or
-   *  absolute paths.
-   *  Returns the absolute resolved path. */
   private resolveRepoRelativePath(rel: unknown, op: string): string {
-    if (typeof rel !== 'string' || rel.length === 0) {
-      throw new Error(`Invalid path for ${op}`);
-    }
-    const fullPath = path.resolve(this.repoPath, rel);
-    const fromRoot = path.relative(this.repoPath, fullPath);
-    if (fromRoot.startsWith('..') || path.isAbsolute(fromRoot)) {
-      throw new Error(`Path escapes repository: ${rel}`);
-    }
-    return fullPath;
+    return resolveRepoRelativePathUtil(this.repoPath, rel, op);
   }
 
-  /** Validate a path that will be passed to git as a positional argument
-   *  (worktree destinations, etc.). Rejects values that look like CLI options
-   *  to prevent argument injection (`--upload-pack=...`, `-x`). */
   private assertSafeArgPath(p: unknown, op: string): string {
-    if (typeof p !== 'string' || p.length === 0) {
-      throw new Error(`Invalid path for ${op}`);
-    }
-    if (p.startsWith('-')) {
-      throw new Error(`Path may not start with '-': ${p}`);
-    }
-    return p;
+    return assertSafeArgPathUtil(p, op);
   }
 
   private createGitService(repoPath: string): GitService {
@@ -223,6 +208,7 @@ export class MainPanel {
     this.currentBranchFilter = undefined;
     this.logSequence = 0;
     this.searchSequence = 0;
+    this.diffSequence.reset();
 
     const oldWatcher = this.fileWatcher;
     oldWatcher.dispose();
@@ -332,7 +318,11 @@ export class MainPanel {
           break;
         }
         case 'getCommitDiff': {
+          // Guard against rapid clicks on different commits: only the most
+          // recently requested diff is delivered to the webview.
+          const ticket = this.diffSequence.issue();
           const commitFiles = await this.gitService.showCommitFiles(message.payload.hash);
+          if (!this.diffSequence.isCurrent(ticket)) break;
           this.post({
             type: 'commitDiffData',
             payload: { hash: message.payload.hash, files: commitFiles },
@@ -340,7 +330,9 @@ export class MainPanel {
           break;
         }
         case 'getFileDiff': {
+          const ticket = this.diffSequence.issue();
           const diffs = await this.gitService.showCommitDiff(message.payload.hash, message.payload.file);
+          if (!this.diffSequence.isCurrent(ticket)) break;
           this.post({
             type: 'fileDiffData',
             payload: { hash: message.payload.hash, file: message.payload.file, diff: diffs[0] || null },
@@ -1081,6 +1073,7 @@ export class MainPanel {
           this.currentBranchFilter = undefined;
           this.logSequence = 0;
           this.searchSequence = 0;
+          this.diffSequence.reset();
 
           const oldWatcher = this.fileWatcher;
           oldWatcher.dispose();

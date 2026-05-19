@@ -207,6 +207,27 @@ describe('GitService — git-flow shortcuts', () => {
     expect(calls[0]).toEqual(['flow', 'hotfix', 'start', '1.0.1']);
     expect(calls[1]).toEqual(['flow', 'hotfix', 'finish', '-m', '1.0.1', '1.0.1']);
   });
+
+  it('rejects flow names that start with "-" (CLI option injection)', async () => {
+    const calls: string[][] = [];
+    mockExec(service, async (args) => { calls.push(args); return ''; });
+    await expect(service.flowFeatureStart('--upload-pack=evil')).rejects.toThrow();
+    await expect(service.flowFeatureFinish('-x')).rejects.toThrow();
+    await expect(service.flowReleaseStart('-rf')).rejects.toThrow();
+    await expect(service.flowReleaseFinish('--force')).rejects.toThrow();
+    await expect(service.flowHotfixStart('-d')).rejects.toThrow();
+    await expect(service.flowHotfixFinish('--help')).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('rejects empty / non-string flow names', async () => {
+    const calls: string[][] = [];
+    mockExec(service, async (args) => { calls.push(args); return ''; });
+    await expect(service.flowFeatureStart('')).rejects.toThrow();
+    // @ts-expect-error - exercising runtime guard
+    await expect(service.flowReleaseStart(undefined)).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+  });
 });
 
 describe('GitService — getFlowBranches', () => {
