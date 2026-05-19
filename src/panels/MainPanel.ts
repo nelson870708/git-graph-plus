@@ -29,6 +29,7 @@ export class MainPanel {
   private currentBranchFilter: string[] | undefined = undefined;
   private isFirstGetLog = true;
   private logSequence = 0;
+  private searchSequence = 0;
   private cachedRepos: RepoInfo[] = [];
   private disposed = false;
   public static onSidebarRefresh: (() => void) | null = null;
@@ -221,6 +222,7 @@ export class MainPanel {
     this.currentRemoteFilter = undefined;
     this.currentBranchFilter = undefined;
     this.logSequence = 0;
+    this.searchSequence = 0;
 
     const oldWatcher = this.fileWatcher;
     oldWatcher.dispose();
@@ -778,17 +780,23 @@ export class MainPanel {
           break;
         }
         case 'searchCommits': {
+          // searchSequence guards against a stale response overwriting a
+          // newer one when the user types fast. Same pattern as getLog.
+          const seq = ++this.searchSequence;
           const results = await this.gitService.searchCommits(message.payload.query, {
             author: message.payload.author,
             after: message.payload.after,
             before: message.payload.before,
           });
+          if (seq !== this.searchSequence) break;
           const searchGraph = buildGraph(results);
           this.post({ type: 'searchResults', payload: { commits: results, graph: searchGraph } });
           break;
         }
         case 'searchByHash': {
+          const seq = ++this.searchSequence;
           const found = await this.gitService.searchByHash(message.payload.hash);
+          if (seq !== this.searchSequence) break;
           if (found) {
             const foundGraph = buildGraph([found]);
             this.post({ type: 'searchResults', payload: { commits: [found], graph: foundGraph } });
@@ -798,7 +806,9 @@ export class MainPanel {
           break;
         }
         case 'searchByFile': {
+          const seq = ++this.searchSequence;
           const results = await this.gitService.searchByFile(message.payload.file);
+          if (seq !== this.searchSequence) break;
           const searchGraph = buildGraph(results);
           this.post({ type: 'searchResults', payload: { commits: results, graph: searchGraph } });
           break;
@@ -1070,6 +1080,7 @@ export class MainPanel {
           this.currentRemoteFilter = undefined;
           this.currentBranchFilter = undefined;
           this.logSequence = 0;
+          this.searchSequence = 0;
 
           const oldWatcher = this.fileWatcher;
           oldWatcher.dispose();
