@@ -517,10 +517,15 @@ export class GitService {
     return parseDiff(raw, file)[0] ?? null;
   }
 
-  private parseNameStatus(raw: string): Array<{ path: string; status: string }> {
+  private parseNameStatus(raw: string): Array<{ path: string; status: string; oldPath?: string }> {
     return raw.trim().split('\n').filter(Boolean).map(line => {
       const parts = line.split('\t');
-      return { path: parts.slice(1).join('\t'), status: parts[0].charAt(0) };
+      const status = parts[0].charAt(0);
+      // Renames/copies: `Rxxx\told\tnew` — expose the new path and old path.
+      if ((status === 'R' || status === 'C') && parts.length >= 3) {
+        return { path: parts[parts.length - 1], status, oldPath: parts[1] };
+      }
+      return { path: parts.slice(1).join('\t'), status };
     });
   }
 
@@ -710,34 +715,25 @@ export class GitService {
     return parseDiff(raw);
   }
 
-  async diffFiles(ref1: string, ref2?: string): Promise<Array<{ path: string; status: string }>> {
+  async diffFiles(ref1: string, ref2?: string): Promise<Array<{ path: string; status: string; oldPath?: string }>> {
     this.assertSafeRef(ref1, 'diff');
     if (ref2) this.assertSafeRef(ref2, 'diff');
     const args = ['diff', '--name-status'];
     args.push(ref1);
     if (ref2) args.push(ref2);
     const raw = await this.exec(args);
-    return raw.trim().split('\n').filter(Boolean).map(line => {
-      const [status, ...rest] = line.split('\t');
-      return { path: rest.join('\t'), status: status[0] };
-    });
+    return this.parseNameStatus(raw);
   }
 
-  async showCommitFiles(hash: string): Promise<Array<{ path: string; status: string }>> {
+  async showCommitFiles(hash: string): Promise<Array<{ path: string; status: string; oldPath?: string }>> {
     this.assertSafeRef(hash, 'show');
     try {
       const raw = await this.exec(['diff', '--name-status', `${hash}^..${hash}`]);
-      return raw.trim().split('\n').filter(Boolean).map(line => {
-        const [status, ...rest] = line.split('\t');
-        return { path: rest.join('\t'), status: status[0] }; // R100 → R
-      });
+      return this.parseNameStatus(raw);
     } catch {
       // Root commit has no parent - --root compares against empty tree
       const raw = await this.exec(['diff-tree', '--no-commit-id', '--name-status', '-r', '--root', hash]);
-      return raw.trim().split('\n').filter(Boolean).map(line => {
-        const [status, ...rest] = line.split('\t');
-        return { path: rest.join('\t'), status: status[0] };
-      });
+      return this.parseNameStatus(raw);
     }
   }
 

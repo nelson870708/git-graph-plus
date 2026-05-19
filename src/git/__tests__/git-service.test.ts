@@ -704,15 +704,16 @@ describe('GitService', () => {
   });
 
   describe('parseNameStatus (private)', () => {
-    it('preserves tabs inside filenames by joining all path segments', () => {
-      // git emits `<status>\t<path>` lines but rename entries can have an
-      // extra tab between old/new paths. The helper joins everything after
-      // the first tab, so tab-containing filenames round-trip.
-      const raw = 'M\tsrc/foo.ts\nR100\told.ts\tnew.ts\n';
+    it('returns the new path for renames and copies, exposing oldPath', () => {
+      // git emits `R<score>\t<old>\t<new>` / `C<score>\t<old>\t<new>` for
+      // renames and copies, and `<status>\t<path>` for everything else.
+      const raw = 'M\tsrc/foo.ts\nR100\told.ts\tnew.ts\nC50\tlib/a.ts\tlib/b.ts\nD\tgone.ts\n';
       const result = (service as any).parseNameStatus(raw);
       expect(result).toEqual([
         { path: 'src/foo.ts', status: 'M' },
-        { path: 'old.ts\tnew.ts', status: 'R' },
+        { path: 'new.ts', status: 'R', oldPath: 'old.ts' },
+        { path: 'lib/b.ts', status: 'C', oldPath: 'lib/a.ts' },
+        { path: 'gone.ts', status: 'D' },
       ]);
     });
   });
