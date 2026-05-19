@@ -123,6 +123,7 @@ class ModalStore {
     const map: Record<string, () => void> = {
       deleteBranch: () => this.closeDeleteBranch(),
       deleteTag: () => this.closeDeleteTag(),
+      deleteRemoteTag: () => this.closeDeleteTag(),
       createBranch: () => this.closeCreateBranch(),
       createTag: () => this.closeCreateTag(),
       merge: () => this.closeMerge(),
@@ -130,9 +131,11 @@ class ModalStore {
       checkoutRemote: () => this.closeCheckoutRemote(),
       renameBranch: () => this.closeRenameBranch(),
       deleteRemoteBranch: () => this.closeDeleteRemoteBranch(),
+      worktreeAdd: () => { /* no AddWorktree modal in modalStore; handled in-component */ },
       worktreeRemove: () => this.closeRemoveWorktree(),
       stashApply: () => this.closeStashApply(),
       stashPop: () => this.closeStashApply(),
+      stashDrop: () => this.closeStashApply(),
       stashRename: () => this.closeStashRename(),
       stashSave: () => this.closeStashSave(),
       setUpstream: () => this.closeSetUpstream(),
@@ -142,8 +145,12 @@ class ModalStore {
       flowInit: () => this.closeFlowInit(),
       flowStart: () => this.closeFlowStart(),
       flowFinish: () => this.closeFlowFinish(),
+      // The flowStart/flowFinish modals dispatch a single 'flowAction' message
+      // (not 'flowStart'/'flowFinish' verbatim). Close both if either errors;
+      // only the actually-open one will be affected.
+      flowAction: () => { this.closeFlowStart(); this.closeFlowFinish(); },
       pushTag: () => this.closePushTag(),
-      pushTagToAllRemotes: () => this.closePushTag(),
+      pushAllTags: () => this.closePushTag(),
     };
     map[source]?.();
   }
