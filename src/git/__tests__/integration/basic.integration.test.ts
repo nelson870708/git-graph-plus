@@ -32,6 +32,18 @@ describe('GitService integration — basic queries', () => {
       expect(commits.length).toBeLessThanOrEqual(2);
     });
 
+    it('does not prepend the UNCOMMITTED row on paginated (skip>0) pages', async () => {
+      for (let i = 0; i < 5; i++) commit(repo.path, `c${i}`, { 'a.txt': `${i}\n` });
+      // Dirty working tree so the first page would carry an UNCOMMITTED row.
+      runGit(repo.path, ['rm', 'a.txt']);
+
+      const firstPage = await svc.log({ limit: 2 });
+      expect(firstPage[0].hash).toBe('UNCOMMITTED');
+
+      const secondPage = await svc.log({ limit: 2, skip: 2 });
+      expect(secondPage.some(c => c.hash === 'UNCOMMITTED')).toBe(false);
+    });
+
     it('captures parent relationships across merges', async () => {
       const { mainTip, featureTip } = seedBranches(repo.path);
       runGit(repo.path, ['merge', '--no-ff', '-m', 'merge feature', 'feature']);

@@ -405,9 +405,13 @@ export class GitService {
             if (parentIdx !== undefined) {
               insertions.push({ idx: parentIdx, commit: sc });
             } else if (
+              !options?.skip &&
               (!options?.remoteFilter || options.remoteFilter.length === 0) &&
               (!options?.branches || options.branches.length === 0)
             ) {
+              // Only pin an out-of-scope stash to the top of the very first
+              // page; on paginated (skip>0) pages this would wrongly inject it
+              // into the middle of the history window.
               insertions.push({ idx: -1, commit: sc });
             }
           }
@@ -421,7 +425,10 @@ export class GitService {
       }
     }
 
-    if (commits.length > 0) {
+    // The UNCOMMITTED summary row belongs only at the very top of the graph.
+    // Skip it on paginated (skip>0) pages, otherwise every page would prepend
+    // a duplicate row.
+    if (commits.length > 0 && !options?.skip) {
       try {
         const porcelain = await this.exec(['status', '--porcelain', '-uall']);
         const lines = porcelain.split('\n').filter(Boolean);
