@@ -57,6 +57,31 @@ describe('Reflog — loading & data flow', () => {
     expect(payload.limit).toBe(200);
   });
 
+  it('does not double-fire getReflog when selectedRef changes', async () => {
+    // Regression: $effect used to auto-track reads inside load(), so any
+    // selectedRef/currentLimit mutation triggered an extra duplicate request.
+    branchStore.branches = [
+      { name: 'main', current: true, remote: undefined, upstream: undefined, ahead: 0, behind: 0, hash: 'h1' },
+      { name: 'feat', current: false, remote: undefined, upstream: undefined, ahead: 0, behind: 0, hash: 'h2' },
+    ];
+    const { container } = render(Reflog, { active: true });
+    deliverReflog([]); // settle initial load
+    globalThis.__postedMessages = [];
+
+    // Pick a non-HEAD entry from the dropdown if present.
+    const select = container.querySelector<HTMLSelectElement>('select');
+    if (select) {
+      select.value = 'feat';
+      await fireEvent.change(select);
+      await waitFor(() => {
+        const reqs = globalThis.__postedMessages.filter(
+          (m) => (m.data as { type?: string }).type === 'getReflog'
+        );
+        expect(reqs.length).toBe(1);
+      });
+    }
+  });
+
   it('renders entries when reflogData arrives', async () => {
     const { container } = render(Reflog, { active: true });
     deliverReflog([

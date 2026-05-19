@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { getVsCodeApi } from '../../lib/vscode-api';
   import { t } from '../../lib/i18n/index.svelte';
   import ContextMenu from './ContextMenu.svelte';
@@ -158,7 +158,11 @@
     vscode.postMessage({ type: 'getReflog', payload: { ref: selectedRef || 'HEAD', limit: currentLimit } });
   }
 
-  $effect(() => { if (active) load(); });
+  // Only react to `active` toggling. Without untrack(), reading selectedRef
+  // and currentLimit inside load() makes the effect auto-subscribe to them,
+  // so changeRef/loadMore would fire a second duplicate getReflog message
+  // and the racing responses could overwrite each other.
+  $effect(() => { if (active) untrack(() => load()); });
 
   onMount(() => {
     function handleMessage(e: MessageEvent) {
