@@ -22,15 +22,30 @@
     const vscode = getVsCodeApi();
     const requestId = `cp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     vscode.postMessage({ type: 'predictConflicts', payload: { ours: 'HEAD', theirs: commit, mergeBase: commit + '^', requestId } });
+    // Bound the wait. If the backend can't compute a prediction (e.g. the
+    // commit is the repository root, so `commit^` doesn't resolve and the
+    // merge-tree call fails), no `conflictPrediction` message will arrive
+    // and the spinner would otherwise spin forever. After 5s, fall back to
+    // "no conflict known" so the user can still proceed.
+    const timeoutId = window.setTimeout(() => {
+      if (conflictPrediction === null) {
+        conflictPrediction = { hasConflict: false, files: [] };
+      }
+      window.removeEventListener('message', handler);
+    }, 5000);
     const handler = (event: MessageEvent) => {
       if (event.data.type !== 'conflictPrediction') { return; }
       // Reject stale responses from prior mounts (modal closed and reopened before reply arrived).
       if (event.data.payload?.requestId !== requestId) { return; }
       conflictPrediction = event.data.payload;
+      window.clearTimeout(timeoutId);
       window.removeEventListener('message', handler);
     };
     window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('message', handler);
+    };
   });
 </script>
 

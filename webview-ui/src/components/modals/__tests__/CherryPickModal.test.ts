@@ -62,6 +62,24 @@ describe('CherryPickModal', () => {
     expect(container.querySelector('.spinner')).not.toBeNull();
   });
 
+  it('falls back to no-conflict after 5s if no response arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = render(CherryPickModal, {
+        commit: 'abc1234', branch: 'main',
+        onClose: vi.fn(), onCherryPick: vi.fn(),
+      });
+      expect(container.querySelector('.spinner')).not.toBeNull();
+      vi.advanceTimersByTime(5000);
+      await tick();
+      // Spinner gone, success banner shown so the user can still proceed.
+      expect(container.querySelector('.spinner')).toBeNull();
+      expect(container.querySelector('.conflict-status.is-success')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('forwards the noCommit checkbox state to onCherryPick', async () => {
     const onCherryPick = vi.fn();
     const { container } = render(CherryPickModal, {
