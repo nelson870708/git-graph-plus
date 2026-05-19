@@ -361,6 +361,7 @@ export const zh: Record<string, string> = {
   'rebase.checkingConflicts': '正在检查 rebase 冲突',
   'rebase.conflictWarning': 'Rebase 冲突 {count} 个文件',
   'rebase.noConflict': '无 rebase 冲突',
+  'rebase.predictionTruncated': '仅检查了前 20 个提交',
 
   // Rebase modal
   'rebaseBranch.title': '变基分支',

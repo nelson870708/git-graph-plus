@@ -198,6 +198,28 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       expect(result.hasConflict).toBe(true);
     });
 
+    it('flags truncated when the branch has more than 20 commits to replay', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'topic']);
+      for (let i = 0; i < 25; i++) commit(repo.path, `topic ${i}`, { [`t${i}.txt`]: `${i}\n` });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main edit', { 'm.txt': 'm\n' });
+
+      const result = await svc.predictRebaseConflicts('topic', 'main');
+      expect(result.truncated).toBe(true);
+    });
+
+    it('does not flag truncated when 20 or fewer commits replay', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'topic']);
+      commit(repo.path, 'topic edit', { 'b.txt': 'b\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main edit', { 'm.txt': 'm\n' });
+
+      const result = await svc.predictRebaseConflicts('topic', 'main');
+      expect(result.truncated).toBeFalsy();
+    });
+
     it('clean rebase reports no conflict', async () => {
       commit(repo.path, 'init', { 'a.txt': 'a\n' });
       runGit(repo.path, ['checkout', '-b', 'topic']);

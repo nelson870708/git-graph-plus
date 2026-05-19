@@ -765,7 +765,7 @@ export class GitService {
 
   private mergeBaseSupported: boolean | null = null;
 
-  async predictRebaseConflicts(branch: string, onto: string): Promise<{ hasConflict: boolean; files: string[] }> {
+  async predictRebaseConflicts(branch: string, onto: string): Promise<{ hasConflict: boolean; files: string[]; truncated?: boolean }> {
     this.assertSafeRef(branch, 'merge-tree');
     this.assertSafeRef(onto, 'merge-tree');
 
@@ -790,7 +790,12 @@ export class GitService {
 
     if (commitList.length === 0) return { hasConflict: false, files: [] };
 
-    const commits = commitList.slice(0, 20);
+    // Cap the per-commit conflict probe at 20 to keep the preview responsive.
+    // Surface `truncated` so the UI can tell the user the prediction only
+    // covers the first 20 commits instead of silently under-reporting.
+    const PROBE_LIMIT = 20;
+    const truncated = commitList.length > PROBE_LIMIT;
+    const commits = commitList.slice(0, PROBE_LIMIT);
     const conflictFiles = new Set<string>();
 
     for (const commit of commits) {
@@ -815,7 +820,7 @@ export class GitService {
       }
     }
 
-    return { hasConflict: conflictFiles.size > 0, files: [...conflictFiles] };
+    return { hasConflict: conflictFiles.size > 0, files: [...conflictFiles], truncated };
   }
 
   async merge(branch: string, options?: { noFf?: boolean; ffOnly?: boolean; squash?: boolean }): Promise<void> {

@@ -361,6 +361,7 @@ export const ko: Record<string, string> = {
   'rebase.checkingConflicts': 'rebase 충돌 확인 중',
   'rebase.conflictWarning': 'rebase 시 충돌 발생({count}개)',
   'rebase.noConflict': 'rebase 시 충돌 없음',
+  'rebase.predictionTruncated': '처음 20개 커밋만 확인함',
 
   // Rebase modal
   'rebaseBranch.title': 'Rebase Branch',

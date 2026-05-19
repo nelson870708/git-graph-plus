@@ -18,7 +18,7 @@
   const shortRef = (ref: string) => /^[0-9a-f]{40}$/i.test(ref) ? ref.substring(0, 7) : ref;
   let rebaseBtn: HTMLButtonElement | undefined = $state();
 
-  let conflictPrediction = $state<{ hasConflict: boolean; files: string[] } | null>(null);
+  let conflictPrediction = $state<{ hasConflict: boolean; files: string[]; truncated?: boolean } | null>(null);
 
   onMount(() => {
     rebaseBtn?.focus();
@@ -58,9 +58,11 @@
       {:else if conflictPrediction.hasConflict}
         <i class="codicon codicon-warning"></i>
         <span>{@html t('rebase.conflictWarning', { count: String(conflictPrediction.files.length) })}</span>
+        {#if conflictPrediction.truncated}<span class="conflict-truncated">({t('rebase.predictionTruncated')})</span>{/if}
       {:else}
         <i class="codicon codicon-check"></i>
         <span>{t('rebase.noConflict')}</span>
+        {#if conflictPrediction.truncated}<span class="conflict-truncated">({t('rebase.predictionTruncated')})</span>{/if}
       {/if}
     </div>
     <button onclick={onClose}>{t('common.cancel')}</button>
@@ -80,5 +82,7 @@
 
   .conflict-status.is-warning { color: #f0a020; }
   .conflict-status.is-success { color: #4caf50; }
+
+  .conflict-truncated { color: var(--text-secondary); font-size: 0.9em; }
 
 </style>

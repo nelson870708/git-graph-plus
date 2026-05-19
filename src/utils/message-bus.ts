@@ -103,7 +103,7 @@ export type ExtensionMessage =
   | { type: 'operationPaused'; payload: { operation: 'rebase' } }
   | { type: 'checkoutBlocked'; payload: { ref: string; pullAfter?: boolean } }
   | { type: 'dirtyState'; payload: { dirty: boolean; requestId?: string } }
-  | { type: 'conflictPrediction'; payload: { hasConflict: boolean; files: string[]; requestId?: string } }
+  | { type: 'conflictPrediction'; payload: { hasConflict: boolean; files: string[]; truncated?: boolean; requestId?: string } }
   | { type: 'bisectResult'; payload: { message: string } }
   | { type: 'statsData'; payload: { byAuthor: Array<{ author: string; email: string; count: number }>; byWeekdayHour: Array<{ weekday: number; hour: number; count: number }> } }
   | { type: 'lsTreeData'; payload: { ref: string; path?: string; entries: Array<{ mode: string; type: 'blob' | 'tree'; hash: string; name: string }> } }

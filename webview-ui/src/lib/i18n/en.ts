@@ -361,6 +361,7 @@ export const en: Record<string, string> = {
   'rebase.checkingConflicts': 'Checking for rebase conflicts',
   'rebase.conflictWarning': 'Rebase conflict in {count} file(s)',
   'rebase.noConflict': 'No rebase conflicts',
+  'rebase.predictionTruncated': 'checked first 20 commits only',
 
   // Rebase modal
   'rebaseBranch.title': 'Rebase Branch',
