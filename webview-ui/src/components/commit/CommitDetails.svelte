@@ -406,18 +406,36 @@
       return;
     }
     const target = selectedDiff;
-    getHighlighter().then(h => {
+    // Yield to the event loop between chunks so a multi-thousand-line diff
+    // doesn't freeze the panel. Each batch processes CHUNK_SIZE lines then
+    // hands control back via a microtask.
+    const CHUNK_SIZE = 250;
+    let cancelled = false;
+    getHighlighter().then(async h => {
       if (selectedDiff !== target) return;
       const newMap = new Map<string, string>();
+      const flat: Array<{ key: string; content: string }> = [];
       for (const hunk of target.hunks) {
         for (let i = 0; i < hunk.lines.length; i++) {
-          const key = `${hunk.oldStart}-${i}`;
-          newMap.set(key, highlightLineSync(h, hunk.lines[i].content, lang));
+          flat.push({ key: `${hunk.oldStart}-${i}`, content: hunk.lines[i].content });
         }
       }
-      if (selectedDiff !== target) return;
+      for (let i = 0; i < flat.length; i += CHUNK_SIZE) {
+        if (cancelled || selectedDiff !== target) return;
+        const end = Math.min(i + CHUNK_SIZE, flat.length);
+        for (let j = i; j < end; j++) {
+          newMap.set(flat[j].key, highlightLineSync(h, flat[j].content, lang));
+        }
+        // Defer to next microtask so user interaction (scroll, switch file)
+        // can interrupt mid-highlight without paying for the whole pass.
+        if (end < flat.length) {
+          await new Promise<void>(resolve => queueMicrotask(resolve));
+        }
+      }
+      if (cancelled || selectedDiff !== target) return;
       highlightedLines = newMap;
     }).catch(() => {});
+    return () => { cancelled = true; };
   });
 
   function getHighlighted(hunkStart: number, lineIdx: number, content: string): string {
