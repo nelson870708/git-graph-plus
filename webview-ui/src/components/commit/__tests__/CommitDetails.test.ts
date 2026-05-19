@@ -95,8 +95,8 @@ describe('CommitDetails — commit info rendering', () => {
   it('omits the committer column when committer matches author', () => {
     const { container } = render(CommitDetails, { commit: commit() });
     const labels = Array.from(container.querySelectorAll('.info-label')).map(el => el.textContent?.trim());
-    expect(labels).toContain('AUTHOR');
-    expect(labels).not.toContain('COMMITTER');
+    expect(labels).toContain('Author');
+    expect(labels).not.toContain('Committer');
   });
 
   it('shows the committer column when committer differs from author', () => {
@@ -106,7 +106,7 @@ describe('CommitDetails — commit info rendering', () => {
       }),
     });
     const labels = Array.from(container.querySelectorAll('.info-label')).map(el => el.textContent?.trim());
-    expect(labels).toContain('COMMITTER');
+    expect(labels).toContain('Committer');
   });
 });
 
@@ -236,7 +236,7 @@ describe('CommitDetails — parent links', () => {
   it('omits the PARENTS row when commit has no parents', () => {
     const { container } = render(CommitDetails, { commit: commit({ parents: [] }) });
     const labels = Array.from(container.querySelectorAll('.meta-label')).map(el => el.textContent?.trim());
-    expect(labels).not.toContain('PARENTS');
+    expect(labels).not.toContain('Parents');
   });
 });
 

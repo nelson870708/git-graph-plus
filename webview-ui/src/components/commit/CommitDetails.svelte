@@ -481,7 +481,7 @@
         <div class="info-columns">
           <!-- Author -->
           <div class="info-column">
-            <div class="info-label">AUTHOR</div>
+            <div class="info-label">{t('details.author')}</div>
             <div class="person-info">
               <img class="avatar-lg" src={getGravatarUrl(commit.author.email, 48)} alt="" loading="lazy" />
               <div class="person-details">
@@ -496,7 +496,7 @@
           <!-- Committer (Only show if different from author) -->
           {#if commit.author.email !== commit.committer.email || commit.author.name !== commit.committer.name}
             <div class="info-column">
-              <div class="info-label">COMMITTER</div>
+              <div class="info-label">{t('details.committer')}</div>
               <div class="person-info">
                 <img class="avatar-lg" src={getGravatarUrl(commit.committer.email, 48)} alt="" loading="lazy" />
                 <div class="person-details">
@@ -515,7 +515,7 @@
         <div class="meta-rows">
           {#if commit.refs.some(r => r.type !== 'stash' && !(r.type === 'remote-branch' && r.name === 'HEAD'))}
             <div class="meta-row">
-              <span class="meta-label">REFS</span>
+              <span class="meta-label">{t('details.refs')}</span>
               <span class="meta-value">
                 {#each [...commit.refs].filter(r => {
                   if (r.type === 'remote-branch' && r.name === 'HEAD') return false;
@@ -551,22 +551,22 @@
             </div>
           {/if}
           <div class="meta-row">
-            <span class="meta-label">SHA</span>
+            <span class="meta-label">{t('details.sha')}</span>
             <span class="meta-value mono">{commit.hash}
               <div class="copy-btns">
-                <button 
-                  class="copy-btn" 
+                <button
+                  class="copy-btn"
                   onclick={() => vscode.postMessage({ type: 'copyToClipboard', payload: { text: commit.hash } })}
-                  aria-label="Copy Full SHA"
-                  use:tooltip={"Copy Full SHA"}
+                  aria-label={t('details.copyFullSha')}
+                  use:tooltip={t('details.copyFullSha')}
                 >
                   <i class="codicon codicon-copy"></i>
                 </button>
-                <button 
-                  class="copy-btn" 
+                <button
+                  class="copy-btn"
                   onclick={() => vscode.postMessage({ type: 'copyToClipboard', payload: { text: commit.abbreviatedHash } })}
-                  aria-label="Copy Short SHA"
-                  use:tooltip={"Copy Short SHA (7 chars)"}
+                  aria-label={t('details.copyShortSha')}
+                  use:tooltip={t('details.copyShortSha')}
                 >
                   <i class="codicon codicon-git-commit"></i>
                 </button>
@@ -575,7 +575,7 @@
           </div>
           {#if commit.parents.length > 0}
             <div class="meta-row">
-              <span class="meta-label">PARENTS</span>
+              <span class="meta-label">{t('details.parents')}</span>
               <span class="meta-value mono">
                 {#each commit.parents as parent, i}
                   {#if i > 0}, {/if}
@@ -1002,6 +1002,7 @@
     color: var(--text-secondary);
     margin-bottom: 8px;
     opacity: 0.8;
+    text-transform: uppercase;
   }
 
   .person-info {
