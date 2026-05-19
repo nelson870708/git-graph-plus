@@ -350,13 +350,25 @@ Binary files a/image.png and b/image.png differ`;
     expect(result[0].file).toBe('foo.ts');
   });
 
-  it('falls back to "unknown" when header has no prefix and no file param', () => {
+  it('resolves prefix-less (--no-prefix) paths from the +++ line', () => {
+    // `git diff --no-prefix` emits no a//b/ prefix; the +++ line carries the
+    // real path, so it should be used rather than falling back to "unknown".
     const raw = `diff --git foo.ts foo.ts
 --- foo.ts
 +++ foo.ts
 @@ -1 +1 @@
 -x
 +y`;
+    const result = parseDiff(raw);
+    expect(result).toHaveLength(1);
+    expect(result[0].file).toBe('foo.ts');
+  });
+
+  it('falls back to "unknown" when there is no usable path anywhere', () => {
+    // No a//b/ prefix and no +++/--- lines (mode-only style header).
+    const raw = `diff --git foo.ts foo.ts
+old mode 100644
+new mode 100755`;
     const result = parseDiff(raw);
     expect(result).toHaveLength(1);
     expect(result[0].file).toBe('unknown');

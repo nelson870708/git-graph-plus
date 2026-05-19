@@ -280,6 +280,32 @@ not a hunk
     expect(result[0].hunks).toEqual([]);
   });
 
+  it('resolves an unquoted path containing the " b/" substring via the +++ line', () => {
+    // A directory literally named "weird b" makes the diff --git header
+    // ambiguous (a/weird b/x.txt b/weird b/x.txt). The +++ line is the
+    // unambiguous source of the post-image path.
+    const raw = `diff --git a/weird b/x.txt b/weird b/x.txt
+index e69de29..0cfbf08 100644
+--- a/weird b/x.txt
++++ b/weird b/x.txt
+@@ -0,0 +1 @@
++content`;
+    const result = parseDiff(raw);
+    expect(result[0].file).toBe('weird b/x.txt');
+  });
+
+  it('resolves a deleted file path from the --- line when +++ is /dev/null', () => {
+    const raw = `diff --git a/weird b/x.txt b/weird b/x.txt
+deleted file mode 100644
+index 0cfbf08..0000000
+--- a/weird b/x.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-content`;
+    const result = parseDiff(raw);
+    expect(result[0].file).toBe('weird b/x.txt');
+  });
+
   it('does not append a phantom context line for the trailing newline', () => {
     // git diff output ends with a newline; splitting on '\n' yields a final
     // empty string. That artifact must not become a context line in the last

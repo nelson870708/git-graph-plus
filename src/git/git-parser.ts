@@ -189,16 +189,22 @@ export function parseDiff(raw: string, file?: string): DiffData[] {
 
   for (const fileDiff of fileDiffs) {
     const lines = fileDiff.split('\n');
-    // Parse file path from "a/path b/path" or quoted paths like "\"a/path\" \"b/path\""
-    let filePath: string;
-    const header = lines[0] ?? '';
-    const quotedMatch = header.match(/^"?a\/(.+?)"?\s+"?b\/(.+?)"?\s*$/);
-    if (quotedMatch) {
-      // Unescape git's quoted path encoding (e.g. \t, \n, octal \NNN)
-      filePath = unescapeGitPath(quotedMatch[2]);
-    } else {
-      const headerMatch = header.match(/a\/(.+?) b\/(.+)/);
-      filePath = headerMatch ? headerMatch[2] : file ?? 'unknown';
+    // Prefer the +++/--- header lines: they each carry the full path on their
+    // own line, so they stay unambiguous even when the path contains spaces or
+    // a literal " b/" substring that would mis-split the "diff --git" header.
+    let filePath = resolveDiffPathFromBody(lines) ?? '';
+    if (!filePath) {
+      // Fallback for diffs without +++/--- lines (e.g. pure mode/rename headers):
+      // parse "a/path b/path" or quoted paths like "\"a/path\" \"b/path\"".
+      const header = lines[0] ?? '';
+      const quotedMatch = header.match(/^"?a\/(.+?)"?\s+"?b\/(.+?)"?\s*$/);
+      if (quotedMatch) {
+        // Unescape git's quoted path encoding (e.g. \t, \n, octal \NNN)
+        filePath = unescapeGitPath(quotedMatch[2]);
+      } else {
+        const headerMatch = header.match(/a\/(.+?) b\/(.+)/);
+        filePath = headerMatch ? headerMatch[2] : file ?? 'unknown';
+      }
     }
 
     // Check if binary
@@ -369,6 +375,41 @@ export function parseLfsLocks(raw: string): Array<{ path: string; owner: string;
     const parts = line.split('\t');
     return { path: parts[0]?.trim() ?? '', owner: parts[1]?.trim() ?? '', id: parts[2]?.trim() ?? '' };
   });
+}
+
+/** Resolve a file path from the +++/--- header lines of a single file diff.
+ *  Prefers the post-image (+++) path; falls back to the pre-image (---) path
+ *  for deletions where +++ is /dev/null. Returns null when neither is usable
+ *  (e.g. a rename/mode-only diff with no +++/--- lines). */
+function resolveDiffPathFromBody(lines: string[]): string | null {
+  let plusPath: string | null = null;
+  let minusPath: string | null = null;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Stop at the first hunk: beyond it, content lines may legitimately start
+    // with "+++ " / "--- " and must not be mistaken for header lines.
+    if (line.startsWith('@@')) break;
+    if (line.startsWith('+++ ')) plusPath = stripDiffPathPrefix(line.slice(4));
+    else if (line.startsWith('--- ')) minusPath = stripDiffPathPrefix(line.slice(4));
+  }
+  return plusPath ?? minusPath;
+}
+
+/** Strip the leading `a/` or `b/` from a +++/--- path, unescape git quoting,
+ *  and map /dev/null (add/delete sentinel) to null. */
+function stripDiffPathPrefix(raw: string): string | null {
+  let s = raw.replace(/\r$/, '');
+  if (s.startsWith('"')) {
+    // Quoted form wraps the whole "b/path" (with \t, octal escapes, etc).
+    s = unescapeGitPath(s);
+  } else {
+    // git only appends a "\t<timestamp>" tail in the unquoted form.
+    const tab = s.indexOf('\t');
+    if (tab !== -1) s = s.slice(0, tab);
+  }
+  if (s === '/dev/null') return null;
+  if (s.startsWith('a/') || s.startsWith('b/')) s = s.slice(2);
+  return s || null;
 }
 
 function unescapeGitPath(p: string): string {
