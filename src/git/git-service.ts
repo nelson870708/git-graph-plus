@@ -725,38 +725,83 @@ export class GitService {
     return this.parseNameStatus(raw);
   }
 
+  private async commitParents(hash: string): Promise<string[]> {
+    try {
+      const raw = await this.exec(['log', '-1', '--format=%P', hash], { silent: true });
+      return raw.trim().split(/\s+/).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
   async showCommitFiles(hash: string): Promise<Array<{ path: string; status: string; oldPath?: string }>> {
     this.assertSafeRef(hash, 'show');
-    try {
-      const raw = await this.exec(['diff', '--name-status', `${hash}^..${hash}`]);
-      return this.parseNameStatus(raw);
-    } catch {
+    const parents = await this.commitParents(hash);
+
+    if (parents.length === 0) {
       // Root commit has no parent - --root compares against empty tree
       const raw = await this.exec(['diff-tree', '--no-commit-id', '--name-status', '-r', '--root', hash]);
       return this.parseNameStatus(raw);
     }
+
+    if (parents.length === 1) {
+      const raw = await this.exec(['diff', '--name-status', `${hash}^..${hash}`]);
+      return this.parseNameStatus(raw);
+    }
+
+    // Merge commit: union of files changed vs each parent. Using `hash^..hash`
+    // would only show changes vs the first parent, hiding everything that
+    // came in from parent 2..N (silent data loss for every octopus merge).
+    const priority: Record<string, number> = { R: 5, C: 4, A: 3, D: 2, M: 1 };
+    const merged = new Map<string, { path: string; status: string; oldPath?: string }>();
+    const perParent = await Promise.all(parents.map(async parent => {
+      this.assertSafeRef(parent, 'diff');
+      const raw = await this.exec(['diff', '--name-status', `${parent}..${hash}`]);
+      return this.parseNameStatus(raw);
+    }));
+    for (const entries of perParent) {
+      for (const e of entries) {
+        const existing = merged.get(e.path);
+        if (!existing || (priority[e.status] ?? 0) > (priority[existing.status] ?? 0)) {
+          merged.set(e.path, e);
+        }
+      }
+    }
+    return Array.from(merged.values());
   }
 
   async showCommitDiff(hash: string, file?: string): Promise<DiffData[]> {
     this.assertSafeRef(hash, 'show');
-    // For merge commits, diff against first parent (hash^1..hash)
-    // For regular commits, git show works fine
-    try {
-      const args = ['diff', '--no-color', `${hash}^..${hash}`];
-      if (file) {
-        args.push('--', file);
-      }
-      const raw = await this.exec(args);
-      return parseDiff(raw);
-    } catch {
-      // Fallback for root commits (no parent)
+    const parents = await this.commitParents(hash);
+
+    if (parents.length === 0) {
+      // Root commit: diff against empty tree.
       const args = ['show', '--no-color', '--format=', hash];
-      if (file) {
-        args.push('--', file);
-      }
+      if (file) args.push('--', file);
       const raw = await this.exec(args);
       return parseDiff(raw);
     }
+
+    if (parents.length > 1 && file) {
+      // Octopus / regular merge with a specific file: find the first parent
+      // whose diff for this file is non-empty. The first-parent-only default
+      // hides changes that came in from parent 2..N.
+      for (const parent of parents) {
+        this.assertSafeRef(parent, 'diff');
+        const raw = await this.exec(['diff', '--no-color', `${parent}..${hash}`, '--', file]);
+        const parsed = parseDiff(raw);
+        if (parsed.length > 0 && parsed[0].hunks.length > 0) {
+          return parsed;
+        }
+      }
+      return [];
+    }
+
+    // Single-parent commit, or merge overview without a specific file.
+    const args = ['diff', '--no-color', `${hash}^..${hash}`];
+    if (file) args.push('--', file);
+    const raw = await this.exec(args);
+    return parseDiff(raw);
   }
 
   // --- Phase 4: Remote Management, Rebase ---

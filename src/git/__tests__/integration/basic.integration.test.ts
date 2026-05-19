@@ -234,6 +234,31 @@ describe('GitService integration — basic queries', () => {
       expect(diffs).toHaveLength(1);
       expect(diffs[0].file).toBe('a.txt');
     });
+
+    it('surfaces files from non-first parents on a merge commit', async () => {
+      // Build a Y-shaped history:
+      //   main: init -> only-on-main
+      //   side: side-only (forked from init)
+      // Then merge side into main. The merge commit's first parent is the
+      // tip of main, so `hash^..hash` only shows changes from `side-only`
+      // (which came in via the second parent). The fix must surface them.
+      commit(repo.path, 'init', { 'shared.txt': 'one\n' });
+      const { runGit } = await import('./helpers');
+      runGit(repo.path, ['checkout', '-b', 'side']);
+      commit(repo.path, 'side-only', { 'from-side.txt': 'side\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'only-on-main', { 'from-main.txt': 'main\n' });
+      runGit(repo.path, ['merge', '--no-ff', '-m', 'merge side', 'side']);
+      const mergeHash = (await import('./helpers')).head(repo.path);
+
+      const files = await svc.showCommitFiles(mergeHash);
+      const paths = files.map(f => f.path);
+      expect(paths).toContain('from-side.txt');
+
+      const diffs = await svc.showCommitDiff(mergeHash, 'from-side.txt');
+      expect(diffs.length).toBeGreaterThan(0);
+      expect(diffs[0].hunks.length).toBeGreaterThan(0);
+    });
   });
 
   describe('diff (working tree)', () => {
