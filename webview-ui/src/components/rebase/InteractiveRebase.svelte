@@ -198,7 +198,7 @@
           ondragend={handleDragEnd}
           role="listitem"
         >
-          <span class="drag-handle" use:tooltip={"Drag to reorder"}>
+          <span class="drag-handle" use:tooltip={t('rebase.dragToReorder')}>
             <i class="codicon codicon-gripper"></i>
           </span>
 
@@ -213,7 +213,7 @@
                 dropdownPos = { x: rect.left, y: rect.bottom + 2 };
                 showActionMenu = index;
               }}
-              use:tooltip={"Click to change action"}
+              use:tooltip={t('rebase.clickToChangeAction')}
             >
               <i class="codicon codicon-{info.icon}"></i>
               {info.label}
@@ -240,10 +240,10 @@
           </div>
 
           <div class="move-btns">
-            <button class="move-btn" disabled={index === 0} onclick={() => moveUp(index)} aria-label="Move up" use:tooltip={"Move up"}>
+            <button class="move-btn" disabled={index === 0} onclick={() => moveUp(index)} aria-label={t('rebase.moveUp')} use:tooltip={t('rebase.moveUp')}>
               <i class="codicon codicon-chevron-up"></i>
             </button>
-            <button class="move-btn" disabled={index === todos.length - 1} onclick={() => moveDown(index)} aria-label="Move down" use:tooltip={"Move down"}>
+            <button class="move-btn" disabled={index === todos.length - 1} onclick={() => moveDown(index)} aria-label={t('rebase.moveDown')} use:tooltip={t('rebase.moveDown')}>
               <i class="codicon codicon-chevron-down"></i>
             </button>
           </div>
@@ -263,7 +263,7 @@
             class="action-option"
             class:active={activeAction === act.value}
             {disabled}
-            use:tooltip={disabled ? 'Cannot squash/fixup the oldest commit' : ''}
+            use:tooltip={disabled ? t('rebase.cannotSquashFirst') : ''}
             onclick={() => !disabled && setAction(showActionMenu!, act.value)}
           >
             <i class="codicon codicon-{act.icon}" style="color: {disabled ? 'var(--text-secondary)' : act.color}"></i>

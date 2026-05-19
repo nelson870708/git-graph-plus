@@ -905,9 +905,9 @@
           >
             <div class="col-message" style="padding-left: {(displayLeftMargin[index] ?? graphWidth) * X_SCALE + 4}px;">
               {#if currentBranchLocalOnly.has(commit.hash)}
-                <span class="local-dot" use:tooltip={"Not pushed"}></span>
+                <span class="local-dot" use:tooltip={t('graph.notPushed')}></span>
               {:else if currentBranchRemoteAhead.has(commit.hash)}
-                <span class="remote-dot" use:tooltip={"Remote only"}></span>
+                <span class="remote-dot" use:tooltip={t('graph.remoteOnly')}></span>
               {/if}
               {#each commit.refs.filter(r => {
                   if (r.type === 'working-dir') return false;
@@ -966,7 +966,7 @@
                     style="--badge-color: {badgeColor};"
                     class:badge-bold={ref.type === 'head' || ref.type === 'tag' || ref.type === 'stash' || isWtBranch}
                     class:badge-head={ref.type === 'head'}
-                    use:tooltip={'Double-click to checkout: ' + (ref.type === 'remote-branch' ? ref.remote + '/' + ref.name : ref.name)}
+                    use:tooltip={t('graph.dblClickCheckout', { ref: ref.type === 'remote-branch' ? ref.remote + '/' + ref.name : ref.name })}
                     ondblclick={(e) => {
                       e.stopPropagation();
                       if (ref.type === 'remote-branch') {

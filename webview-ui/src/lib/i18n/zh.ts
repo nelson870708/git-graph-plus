@@ -120,6 +120,9 @@ export const zh: Record<string, string> = {
   'graph.author': '作者',
   'graph.date': '日期',
   'graph.sha': 'SHA',
+  'graph.notPushed': '未推送',
+  'graph.remoteOnly': '仅远程',
+  'graph.dblClickCheckout': '双击 checkout：{ref}',
 
   // Graph context menu
   'graph.checkoutHash': '检出 {hash}',
@@ -188,6 +191,11 @@ export const zh: Record<string, string> = {
   'rebase.noChanges': '无变更 — 所有提交均为 pick',
   'rebase.inlineDesc.reword': '新消息',
   'rebase.inlineDesc.squash': '最终提交消息',
+  'rebase.dragToReorder': '拖动以重新排序',
+  'rebase.clickToChangeAction': '点击以更改 action',
+  'rebase.moveUp': '上移',
+  'rebase.moveDown': '下移',
+  'rebase.cannotSquashFirst': '无法对最早的提交执行 squash/fixup',
 
   // Commit details
   'details.commit': '提交',
@@ -445,6 +453,8 @@ export const zh: Record<string, string> = {
   'conflict.op.rebase': 'Rebase',
   'conflict.op.revert': 'Revert',
   'conflict.op.cherryPick': 'Cherry-Pick',
+  'conflict.markResolved': '标记为已解决 (git add)',
+  'conflict.openFile': '打开文件',
   'rebase.pause.message': 'Rebase 已暂停 - 请进行更改，然后继续',
   'rebase.pause.continue': '继续',
   'rebase.pause.abort': '中止',

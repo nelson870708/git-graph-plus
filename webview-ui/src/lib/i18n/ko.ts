@@ -120,6 +120,9 @@ export const ko: Record<string, string> = {
   'graph.author': '작성자',
   'graph.date': '날짜',
   'graph.sha': 'SHA',
+  'graph.notPushed': '푸시되지 않음',
+  'graph.remoteOnly': '원격에만 존재',
+  'graph.dblClickCheckout': '더블클릭으로 checkout: {ref}',
 
   // Graph context menu
   'graph.checkoutHash': '{hash} checkout',
@@ -188,6 +191,11 @@ export const ko: Record<string, string> = {
   'rebase.noChanges': '변경 없음 — 모든 커밋이 pick 상태입니다',
   'rebase.inlineDesc.reword': '새 메시지',
   'rebase.inlineDesc.squash': '최종 커밋 메시지',
+  'rebase.dragToReorder': '드래그로 순서 변경',
+  'rebase.clickToChangeAction': '클릭하여 action 변경',
+  'rebase.moveUp': '위로 이동',
+  'rebase.moveDown': '아래로 이동',
+  'rebase.cannotSquashFirst': '가장 오래된 commit은 squash/fixup할 수 없습니다',
 
   // Commit details
   'details.commit': 'Commit',
@@ -445,6 +453,8 @@ export const ko: Record<string, string> = {
   'conflict.op.rebase': 'Rebase',
   'conflict.op.revert': 'Revert',
   'conflict.op.cherryPick': 'Cherry-Pick',
+  'conflict.markResolved': '해결됨으로 표시 (git add)',
+  'conflict.openFile': '파일 열기',
   'rebase.pause.message': 'Rebase 일시 정지 - 변경 사항을 적용하고 계속하세요',
   'rebase.pause.continue': '계속',
   'rebase.pause.abort': '중단',

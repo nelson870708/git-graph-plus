@@ -354,11 +354,11 @@
                 {/if}
               </span>
               {#if !file.resolved}
-                <span class="conflict-stage-hint" onclick={(e) => { e.stopPropagation(); vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} role="button" tabindex={0} onkeydown={(e) => { if (e.key === 'Enter') vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} use:tooltip={"Mark as resolved (git add)"}>
+                <span class="conflict-stage-hint" onclick={(e) => { e.stopPropagation(); vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} role="button" tabindex={0} onkeydown={(e) => { if (e.key === 'Enter') vscode.postMessage({ type: 'stageFile', payload: { file: file.path } }); }} use:tooltip={t('conflict.markResolved')}>
                   <i class="codicon codicon-check"></i>
                 </span>
               {/if}
-              <i class="codicon codicon-go-to-file conflict-open-icon" use:tooltip={"Open file"}></i>
+              <i class="codicon codicon-go-to-file conflict-open-icon" use:tooltip={t('conflict.openFile')}></i>
             </button>
           </div>
         {/each}

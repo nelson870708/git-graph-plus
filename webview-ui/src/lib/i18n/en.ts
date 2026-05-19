@@ -120,6 +120,9 @@ export const en: Record<string, string> = {
   'graph.author': 'Author',
   'graph.date': 'Date',
   'graph.sha': 'SHA',
+  'graph.notPushed': 'Not pushed',
+  'graph.remoteOnly': 'Remote only',
+  'graph.dblClickCheckout': 'Double-click to checkout: {ref}',
 
   // Graph context menu
   'graph.checkoutHash': 'Checkout {hash}',
@@ -188,6 +191,11 @@ export const en: Record<string, string> = {
   'rebase.noChanges': 'No changes — all commits are set to pick',
   'rebase.inlineDesc.reword': 'New message',
   'rebase.inlineDesc.squash': 'Final commit message',
+  'rebase.dragToReorder': 'Drag to reorder',
+  'rebase.clickToChangeAction': 'Click to change action',
+  'rebase.moveUp': 'Move up',
+  'rebase.moveDown': 'Move down',
+  'rebase.cannotSquashFirst': 'Cannot squash/fixup the oldest commit',
 
   // Commit details
   'details.commit': 'Commit',
@@ -445,6 +453,8 @@ export const en: Record<string, string> = {
   'conflict.op.rebase': 'Rebase',
   'conflict.op.revert': 'Revert',
   'conflict.op.cherryPick': 'Cherry-Pick',
+  'conflict.markResolved': 'Mark as resolved (git add)',
+  'conflict.openFile': 'Open file',
   'rebase.pause.message': 'Rebase paused - make your changes, then continue',
   'rebase.pause.continue': 'Continue',
   'rebase.pause.abort': 'Abort',
