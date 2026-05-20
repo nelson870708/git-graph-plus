@@ -1475,6 +1475,7 @@
     padding: 0 10px;
     color: var(--text-secondary);
     white-space: nowrap;
+    text-align: right;
   }
 
   .col-hash {
