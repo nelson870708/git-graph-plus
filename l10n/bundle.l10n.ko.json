@@ -9,6 +9,7 @@
   "pushing": "Push 중...",
   "pushFailed": "Push 실패: {0}",
   "checkedOut": "{0}(으)로 checkout 완료",
+  "commitAmended": "마지막 커밋을 amend 했습니다",
   "checkoutFailed": "Checkout 실패: {0}",
   "enterBranchName": "브랜치 이름 입력",
   "branchPlaceholder": "feature/my-branch",

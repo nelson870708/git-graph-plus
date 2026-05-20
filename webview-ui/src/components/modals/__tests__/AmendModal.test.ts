@@ -1,0 +1,72 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, fireEvent, cleanup } from '@testing-library/svelte';
+import AmendModal from '../AmendModal.svelte';
+import { i18n } from '../../../lib/i18n/index.svelte';
+
+beforeEach(() => i18n.setLocale('en'));
+afterEach(() => cleanup());
+
+const base = {
+  hash: 'abcdef1234567890',
+  subject: 'fix: thing',
+  message: 'fix: thing\n\nbody line',
+  isPushed: false,
+};
+
+describe('AmendModal', () => {
+  it('keeps the message by default and disables the textarea', () => {
+    const { container } = render(AmendModal, { ...base, onClose: () => {}, onAmend: () => {} });
+    const textarea = container.querySelector<HTMLTextAreaElement>('#amend-message')!;
+    expect(textarea.disabled).toBe(true);
+  });
+
+  it('enables the textarea when "keep message" is unchecked', async () => {
+    const { container } = render(AmendModal, { ...base, onClose: () => {}, onAmend: () => {} });
+    const keep = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await fireEvent.click(keep); // uncheck keepMessage
+    const textarea = container.querySelector<HTMLTextAreaElement>('#amend-message')!;
+    expect(textarea.disabled).toBe(false);
+  });
+
+  it('amends keeping the message (no message in payload)', async () => {
+    const onAmend = vi.fn();
+    const { getByText } = render(AmendModal, { ...base, onClose: () => {}, onAmend });
+    await fireEvent.click(getByText('Amend'));
+    expect(onAmend).toHaveBeenCalledWith({ message: undefined, keepMessage: true, resetDate: false, resetAuthor: false, only: false });
+  });
+
+  it('amends with the edited message when keep is unchecked', async () => {
+    const onAmend = vi.fn();
+    const { container, getByText } = render(AmendModal, { ...base, onClose: () => {}, onAmend });
+    const keep = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await fireEvent.click(keep);
+    const textarea = container.querySelector<HTMLTextAreaElement>('#amend-message')!;
+    await fireEvent.input(textarea, { target: { value: 'new message' } });
+    await fireEvent.click(getByText('Amend'));
+    expect(onAmend).toHaveBeenCalledWith({ message: 'new message', keepMessage: false, resetDate: false, resetAuthor: false, only: false });
+  });
+
+  it('disables Amend when editing with an empty message', async () => {
+    const { container, getByText } = render(AmendModal, { ...base, message: '', onClose: () => {}, onAmend: () => {} });
+    const keep = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await fireEvent.click(keep); // edit mode, message empty
+    expect((getByText('Amend') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('passes only:true when the --only checkbox is checked', async () => {
+    const onAmend = vi.fn();
+    const { container, getByText } = render(AmendModal, { ...base, onClose: () => {}, onAmend });
+    // Checkboxes order: keepMessage, resetDate, resetAuthor, only
+    const checkboxes = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    await fireEvent.click(checkboxes[3]); // --only
+    await fireEvent.click(getByText('Amend'));
+    expect(onAmend).toHaveBeenCalledWith(expect.objectContaining({ only: true, keepMessage: true }));
+  });
+
+  it('shows the pushed warning only when isPushed', () => {
+    const { queryByRole, rerender } = render(AmendModal, { ...base, isPushed: false, onClose: () => {}, onAmend: () => {} });
+    expect(queryByRole('alert')).toBeNull();
+    rerender({ ...base, isPushed: true, onClose: () => {}, onAmend: () => {} });
+    expect(queryByRole('alert')).not.toBeNull();
+  });
+});

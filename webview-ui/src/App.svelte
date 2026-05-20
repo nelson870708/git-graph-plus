@@ -24,6 +24,7 @@
   import StashApplyModal from './components/modals/StashApplyModal.svelte';
   import StashRenameModal from './components/modals/StashRenameModal.svelte';
   import StashSaveModal from './components/modals/StashSaveModal.svelte';
+import AmendModal from './components/modals/AmendModal.svelte';
   import RenameBranchModal from './components/modals/RenameBranchModal.svelte';
   import DeleteRemoteBranchModal from './components/modals/DeleteRemoteBranchModal.svelte';
   import DeleteRemoteTagModal from './components/modals/DeleteRemoteTagModal.svelte';
@@ -540,6 +541,17 @@
   <StashSaveModal
     onClose={() => { modalStore.closeStashSave(); }}
     onSave={(message, includeUntracked, keepIndex) => { modalStore.closeStashSave(); vscode.postMessage({ type: 'stashSave', payload: { message: message || undefined, includeUntracked, keepIndex } }); }}
+  />
+{/if}
+
+{#if modalStore.amend.show}
+  <AmendModal
+    hash={modalStore.amend.hash}
+    subject={modalStore.amend.subject}
+    message={modalStore.amend.message}
+    isPushed={modalStore.amend.isPushed}
+    onClose={() => { modalStore.closeAmend(); }}
+    onAmend={(opts) => { modalStore.closeAmend(); vscode.postMessage({ type: 'amendCommit', payload: opts }); }}
   />
 {/if}
 

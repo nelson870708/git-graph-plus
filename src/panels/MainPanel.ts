@@ -540,6 +540,22 @@ export class MainPanel {
         }
         case 'openScmView': {
           await vscode.commands.executeCommand('workbench.view.scm');
+          // When opened alongside the amend modal, return focus to the webview
+          // so the modal stays keyboard-interactive (Escape to close, typing in
+          // the message). Without this, focus stays in the SCM view.
+          if (message.payload?.returnFocus) {
+            this.panel.reveal(this.panel.viewColumn, false);
+          }
+          break;
+        }
+        case 'amendCommit': {
+          await this.gitService.amendCommit(message.payload);
+          this.post({
+            type: 'operationComplete',
+            payload: { operation: 'amendCommit', success: true },
+          });
+          vscode.window.showInformationMessage(vscode.l10n.t('commitAmended'));
+          await this.refreshAll();
           break;
         }
         case 'fetch': {

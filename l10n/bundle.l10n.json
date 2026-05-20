@@ -9,6 +9,7 @@
   "pushing": "Pushing...",
   "pushFailed": "Push failed: {0}",
   "checkedOut": "Checked out {0}",
+  "commitAmended": "Last commit amended",
   "checkoutFailed": "Checkout failed: {0}",
   "enterBranchName": "Enter branch name",
   "branchPlaceholder": "feature/my-branch",

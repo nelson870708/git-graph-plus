@@ -123,7 +123,21 @@ export const zh: Record<string, string> = {
   'graph.sha': 'SHA',
   'graph.notPushed': '未推送',
   'graph.remoteOnly': '仅远程',
-  'graph.dblClickCheckout': '双击 checkout：{ref}',
+  'graph.amendRef': "修正 '{ref}'",
+  'graph.amendCommit': 'Amend Commit',
+  'amend.title': '修正上一次提交',
+  'amend.stagedIncluded': '已暂存 {count} 个',
+  'amend.stagedNone': '无已暂存更改',
+  'amend.checkingStaged': '正在检查已暂存更改',
+  'amend.pushedWarning': '该提交已推送。amend 会重写历史，需要<span class="modal-emph modal-emph--danger">强制推送</span>，并可能影响协作者。',
+  'amend.message': '提交信息',
+  'amend.keepMessage': '保持提交信息不变',
+  'amend.resetDate': '将时间改为当前',
+  'amend.resetAuthor': '将作者重设为我',
+  'amend.only': '不包含已暂存的更改（仅信息/元数据）',
+  'amend.onlyNote': '不包含已暂存更改',
+  'amend.amend': 'Amend',
+  'graph.dblClickCheckout': '双击 Checkout：{ref}',
 
   // Graph context menu
   'graph.checkoutHash': '检出 {hash}',
@@ -330,18 +344,18 @@ export const zh: Record<string, string> = {
   'cherryPick.title': '遴选提交',
   'cherryPick.desc': '将选定的提交应用到当前分支。',
   'cherryPick.noCommit': '应用更改但不提交',
-  'cherryPick.checkingConflicts': '正在检查 cherry-pick 冲突',
-  'cherryPick.conflictWarning': 'Cherry-pick 冲突 {count} 个文件',
-  'cherryPick.noConflict': '无 cherry-pick 冲突',
+  'cherryPick.checkingConflicts': '正在检查 Cherry-Pick 冲突',
+  'cherryPick.conflictWarning': 'Cherry-Pick 冲突 {count} 个文件',
+  'cherryPick.noConflict': '无 Cherry-Pick 冲突',
   'cherryPick.cherryPick': '遴选',
 
   // Revert modal
   'revert.title': '还原提交',
   'revert.desc': '创建一个新提交，用于撤销选定提交的更改。',
   'revert.noCommit': '应用更改但不提交',
-  'revert.checkingConflicts': '正在检查 revert 冲突',
+  'revert.checkingConflicts': '正在检查 Revert 冲突',
   'revert.conflictWarning': 'Revert 冲突 {count} 个文件',
-  'revert.noConflict': '无 revert 冲突',
+  'revert.noConflict': '无 Revert 冲突',
   'revert.revert': '还原',
 
   // Merge modal
@@ -353,15 +367,15 @@ export const zh: Record<string, string> = {
   'merge.ffOnly': '仅快进 - 无法快进时失败',
   'merge.squash': '压缩 - 将所有提交合并为一个',
   'merge.squashWarning': '原始提交在历史中<span class="modal-emph modal-emph--danger">将不会被保留</span>。',
-  'merge.checkingConflicts': '正在检查 merge 冲突',
+  'merge.checkingConflicts': '正在检查 Merge 冲突',
   'merge.conflictWarning': 'Merge 冲突 {count} 个文件',
-  'merge.noConflict': '无 merge 冲突',
+  'merge.noConflict': '无 Merge 冲突',
 
   'merge.merge': '合并',
 
-  'rebase.checkingConflicts': '正在检查 rebase 冲突',
+  'rebase.checkingConflicts': '正在检查 Rebase 冲突',
   'rebase.conflictWarning': 'Rebase 冲突 {count} 个文件',
-  'rebase.noConflict': '无 rebase 冲突',
+  'rebase.noConflict': '无 Rebase 冲突',
   'rebase.predictionTruncated': '仅检查了前 20 个提交',
 
   // Rebase modal

@@ -36,7 +36,8 @@ export type WebviewMessage =
   | { type: 'removeRemote'; payload: { name: string } }
   | { type: 'openDiff'; payload: { file: string; commitHash?: string; ref1?: string; ref2?: string; staged?: boolean } }
   | { type: 'openFile'; payload: { file: string } }
-  | { type: 'openScmView' }
+  | { type: 'openScmView'; payload?: { returnFocus?: boolean } }
+  | { type: 'amendCommit'; payload: { message?: string; keepMessage?: boolean; resetDate?: boolean; resetAuthor?: boolean; only?: boolean } }
   | { type: 'stashDrop'; payload: { index: number } }
   | { type: 'stashRename'; payload: { index: number; message: string } }
   | { type: 'worktreeAdd'; payload: { path: string; branch?: string; newBranch?: string } }

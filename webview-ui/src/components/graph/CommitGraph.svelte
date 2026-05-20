@@ -644,6 +644,20 @@
         groups.push([{ label: t('graph.resetBranchToHere', { branch: currentBranch }), action: () => { resetTarget = commit.hash; resetMode = 'mixed'; showResetModal = true; } }]);
       }
 
+      // ── Amend (most recent commit / HEAD) ──
+      if (isHead) {
+        const fullMessage = commit.body ? `${commit.subject}\n\n${commit.body}` : commit.subject;
+        const cur = branchStore.currentBranch;
+        const isPushed = !!cur?.upstream && !cur?.upstreamGone && (cur?.ahead ?? 0) === 0;
+        groups.push([{
+          label: t('graph.amendCommit'),
+          action: () => {
+            modalStore.openAmend({ hash: commit.hash, subject: commit.subject, message: fullMessage, isPushed });
+            vscode.postMessage({ type: 'openScmView', payload: { returnFocus: true } });
+          },
+        }]);
+      }
+
       // ── Commit operations ──
       groups.push([
         {
@@ -730,6 +744,30 @@
     }
 
     contextMenu = { x: e.clientX, y: e.clientY, items };
+  }
+
+  // Context menu for the uncommitted-changes row: amend the last commit.
+  function onUncommittedContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    const headCommit = commitStore.commits.find(c => c.refs.some(r => r.type === 'head'));
+    if (!headCommit) return; // nothing to amend (empty repo / no HEAD loaded)
+    const cur = branchStore.currentBranch;
+    // HEAD is "pushed" when the branch tracks an existing upstream and is not ahead of it.
+    const isPushed = !!cur?.upstream && !cur?.upstreamGone && (cur?.ahead ?? 0) === 0;
+    const fullMessage = headCommit.body ? `${headCommit.subject}\n\n${headCommit.body}` : headCommit.subject;
+    const ref = cur?.name ?? headCommit.abbreviatedHash;
+    contextMenu = {
+      x: e.clientX,
+      y: e.clientY,
+      items: [{
+        label: t('graph.amendRef', { ref }),
+        action: () => {
+          contextMenu = null;
+          modalStore.openAmend({ hash: headCommit.hash, subject: headCommit.subject, message: fullMessage, isPushed });
+          vscode.postMessage({ type: 'openScmView', payload: { returnFocus: true } });
+        },
+      }],
+    };
   }
 
   function formatDate(dateStr: string): string {
@@ -906,7 +944,7 @@
                 }
               }
             }}
-            oncontextmenu={(e) => { if (commit.hash !== 'UNCOMMITTED') onCommitContextMenu(e, commit); }}
+            oncontextmenu={(e) => { if (commit.hash === 'UNCOMMITTED') onUncommittedContextMenu(e); else onCommitContextMenu(e, commit); }}
             use:tooltip={commit.hash === 'UNCOMMITTED' ? t('graph.clickToOpenScm') : ''}
             role="row"
             tabindex={0}

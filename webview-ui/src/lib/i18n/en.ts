@@ -9,7 +9,7 @@ export const en: Record<string, string> = {
   'toolbar.refresh': 'Refresh',
   'toolbar.stashDesc': 'Stash (save uncommitted changes)',
   'toolbar.fetchAll': 'Fetch All (download remote changes)',
-  'toolbar.pullDesc': 'Pull (fetch + merge)',
+  'toolbar.pullDesc': 'Pull (Fetch + Merge)',
   'toolbar.pushDesc': 'Push (upload local commits)',
   'toolbar.refreshDesc': 'Refresh (Ctrl+R)',
   'toolbar.noRemotes': 'No remotes configured. Add a remote first.',
@@ -123,6 +123,20 @@ export const en: Record<string, string> = {
   'graph.sha': 'SHA',
   'graph.notPushed': 'Not pushed',
   'graph.remoteOnly': 'Remote only',
+  'graph.amendRef': "Amend '{ref}'",
+  'graph.amendCommit': 'Amend Commit',
+  'amend.title': 'Amend Last Commit',
+  'amend.stagedIncluded': '{count} staged',
+  'amend.stagedNone': 'No staged changes',
+  'amend.checkingStaged': 'Checking staged changes',
+  'amend.pushedWarning': 'This commit is already pushed. Amending rewrites history and will require a <span class="modal-emph modal-emph--danger">force-push</span>, affecting collaborators.',
+  'amend.message': 'Commit message',
+  'amend.keepMessage': 'Keep the commit message',
+  'amend.resetDate': 'Set date to now',
+  'amend.resetAuthor': 'Reset author to me',
+  'amend.only': 'Do not include staged changes (message/metadata only)',
+  'amend.onlyNote': 'Staged changes excluded',
+  'amend.amend': 'Amend',
   'graph.dblClickCheckout': 'Double-click to checkout: {ref}',
 
   // Graph context menu
@@ -322,7 +336,7 @@ export const en: Record<string, string> = {
   // Pull modal
   'pull.title': 'Pull',
   'pull.desc': 'Pull changes from the remote repository.',
-  'pull.rebase': 'Rebase instead of merge',
+  'pull.rebase': 'Rebase instead of Merge',
   'pull.stash': 'Stash and reapply local changes',
   'pull.pull': 'Pull',
 

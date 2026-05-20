@@ -65,6 +65,11 @@ class ModalStore {
   openStashSave() { this.stashSave = { show: true }; }
   closeStashSave() { this.stashSave = { show: false }; }
 
+  // ── Amend (last commit) ──
+  amend = $state<{ show: boolean; hash: string; subject: string; message: string; isPushed: boolean }>({ show: false, hash: '', subject: '', message: '', isPushed: false });
+  openAmend(p: { hash: string; subject: string; message: string; isPushed: boolean }) { this.amend = { show: true, ...p }; }
+  closeAmend() { this.amend = { show: false, hash: '', subject: '', message: '', isPushed: false }; }
+
   // ── Set Upstream ──
   setUpstream = $state({ show: false, branchName: '', currentUpstream: '' });
   openSetUpstream(branchName: string, currentUpstream?: string) { this.setUpstream = { show: true, branchName, currentUpstream: currentUpstream ?? '' }; }
@@ -138,6 +143,7 @@ class ModalStore {
       stashDrop: () => this.closeStashApply(),
       stashRename: () => this.closeStashRename(),
       stashSave: () => this.closeStashSave(),
+      amendCommit: () => this.closeAmend(),
       setUpstream: () => this.closeSetUpstream(),
       fetch: () => this.closeFetch(),
       pull: () => this.closePull(),
@@ -170,6 +176,7 @@ class ModalStore {
     this.closeStashApply();
     this.closeStashRename();
     this.closeStashSave();
+    this.closeAmend();
     this.closeSetUpstream();
     this.closeFetch();
     this.closePull();

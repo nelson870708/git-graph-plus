@@ -134,6 +134,66 @@ describe('GitService integration — state mutations', () => {
     });
   });
 
+  describe('amendCommit', () => {
+    it('rewrites the last commit message when editing', async () => {
+      commit(repo.path, 'original message', { 'a.txt': 'a\n' });
+      await svc.amendCommit({ message: 'amended message' });
+      const tip = (await svc.log()).find(c => c.hash !== 'UNCOMMITTED')!;
+      expect(tip.subject).toBe('amended message');
+    });
+
+    it('folds staged changes into the last commit and keeps the message', async () => {
+      commit(repo.path, 'base', { 'a.txt': 'a\n' });
+      writeFileSync(join(repo.path, 'b.txt'), 'b\n');
+      runGit(repo.path, ['add', 'b.txt']);
+      await svc.amendCommit({ keepMessage: true });
+      const files = (await svc.showCommitFiles('HEAD')).map(f => f.path);
+      expect(files).toContain('b.txt');
+      const tip = (await svc.log()).find(c => c.hash !== 'UNCOMMITTED')!;
+      expect(tip.subject).toBe('base');
+    });
+
+    it('leaves unstaged changes out of the amend', async () => {
+      commit(repo.path, 'base', { 'a.txt': 'a\n' });
+      writeFileSync(join(repo.path, 'unstaged.txt'), 'u\n'); // never staged
+      await svc.amendCommit({ keepMessage: true });
+      const files = (await svc.showCommitFiles('HEAD')).map(f => f.path);
+      expect(files).not.toContain('unstaged.txt');
+    });
+
+    it('resets the author date to now with resetDate', async () => {
+      // helpers commit with GIT_AUTHOR_DATE=2024-01-01.
+      commit(repo.path, 'old', { 'a.txt': 'a\n' });
+      await svc.amendCommit({ keepMessage: true, resetDate: true });
+      const tip = (await svc.log()).find(c => c.hash !== 'UNCOMMITTED')!;
+      expect(tip.author.date.startsWith('2024-01-01')).toBe(false);
+    });
+
+    it('resets the author identity with resetAuthor', async () => {
+      // helpers author commits as author@example.com; repo config user is test@example.com.
+      commit(repo.path, 'by someone else', { 'a.txt': 'a\n' });
+      await svc.amendCommit({ keepMessage: true, resetAuthor: true });
+      const tip = (await svc.log()).find(c => c.hash !== 'UNCOMMITTED')!;
+      expect(tip.author.email).toBe('test@example.com');
+    });
+
+    it('excludes staged changes when only is set (message/metadata only)', async () => {
+      commit(repo.path, 'base', { 'a.txt': 'a\n' });
+      writeFileSync(join(repo.path, 'staged.txt'), 's\n');
+      runGit(repo.path, ['add', 'staged.txt']);
+      await svc.amendCommit({ message: 'reworded', only: true });
+      const files = (await svc.showCommitFiles('HEAD')).map(f => f.path);
+      expect(files).not.toContain('staged.txt');
+      const tip = (await svc.log()).find(c => c.hash !== 'UNCOMMITTED')!;
+      expect(tip.subject).toBe('reworded');
+    });
+
+    it('rejects an empty message when not keeping the message', async () => {
+      commit(repo.path, 'base', { 'a.txt': 'a\n' });
+      await expect(svc.amendCommit({ message: '   ' })).rejects.toThrow();
+    });
+  });
+
   describe('tag CRUD', () => {
     it('createTag (lightweight) at HEAD', async () => {
       commit(repo.path, 'init');

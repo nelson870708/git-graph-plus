@@ -9,6 +9,7 @@
   "pushing": "正在推送...",
   "pushFailed": "推送失败：{0}",
   "checkedOut": "已检出 {0}",
+  "commitAmended": "已修正上一次提交",
   "checkoutFailed": "检出失败：{0}",
   "enterBranchName": "输入分支名称",
   "branchPlaceholder": "feature/my-branch",

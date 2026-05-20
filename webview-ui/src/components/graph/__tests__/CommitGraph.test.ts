@@ -104,6 +104,60 @@ describe('CommitGraph smoke', () => {
     expect(uiStore.selectedCommitHash).toBeNull();
   });
 
+  it('right-clicking the UNCOMMITTED row opens an Amend menu, then the amend modal + SCM', async () => {
+    const { modalStore } = await import('../../../lib/stores/modals.svelte');
+    const head = makeCommit('h1', 'first');
+    head.refs = [{ type: 'head', name: 'main' }];
+    commitStore.setData(makeGraphData([
+      makeCommit('UNCOMMITTED', 'Uncommitted changes'),
+      head,
+    ]));
+    branchStore.branches = [
+      { name: 'main', current: true, ahead: 1, behind: 0, hash: 'h1' },
+    ];
+    const { container } = render(CommitGraph, {});
+    await tick();
+    globalThis.__postedMessages = [];
+    const row = container.querySelectorAll<HTMLElement>('.commit-row')[0];
+    await fireEvent.contextMenu(row, { clientX: 10, clientY: 10 });
+    await tick();
+    // The single menu item is "Amend '{ref}'" (ref = current branch); click it.
+    const item = Array.from(container.querySelectorAll<HTMLElement>('*'))
+      .find(el => el.children.length === 0 && /^amend 'main'$/i.test((el.textContent ?? '').trim()));
+    expect(item).toBeTruthy();
+    await fireEvent.click(item!);
+    await tick();
+    expect(modalStore.amend.show).toBe(true);
+    expect(modalStore.amend.hash).toBe('h1');
+    expect(globalThis.__postedMessages.some(m => (m.data as { type?: string }).type === 'openScmView')).toBe(true);
+    modalStore.closeAmend();
+  });
+
+  it('right-clicking the HEAD commit opens the amend modal + SCM', async () => {
+    const { modalStore } = await import('../../../lib/stores/modals.svelte');
+    const head = makeCommit('h2', 'latest', ['h1']);
+    head.refs = [{ type: 'head', name: 'main' }];
+    commitStore.setData(makeGraphData([head, makeCommit('h1', 'first')]));
+    branchStore.branches = [
+      { name: 'main', current: true, ahead: 1, behind: 0, hash: 'h2' },
+    ];
+    const { container } = render(CommitGraph, {});
+    await tick();
+    globalThis.__postedMessages = [];
+    const row = container.querySelectorAll<HTMLElement>('.commit-row')[0]; // HEAD row
+    await fireEvent.contextMenu(row, { clientX: 10, clientY: 10 });
+    await tick();
+    const item = Array.from(container.querySelectorAll<HTMLElement>('*'))
+      .find(el => el.children.length === 0 && /^amend commit$/i.test((el.textContent ?? '').trim()));
+    expect(item).toBeTruthy();
+    await fireEvent.click(item!);
+    await tick();
+    expect(modalStore.amend.show).toBe(true);
+    expect(modalStore.amend.hash).toBe('h2');
+    expect(globalThis.__postedMessages.some(m => (m.data as { type?: string }).type === 'openScmView')).toBe(true);
+    modalStore.closeAmend();
+  });
+
   it('does not crash on a branch-set fingerprint cache hit (same commits, same branch)', async () => {
     // First mount populates the cache.
     commitStore.setData(makeGraphData([

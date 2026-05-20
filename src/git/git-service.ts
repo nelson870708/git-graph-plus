@@ -1241,6 +1241,40 @@ export class GitService {
     await this.exec(['reset', `--${mode}`, ref]);
   }
 
+  /**
+   * Amend the last commit (HEAD). Folds whatever is currently staged into HEAD
+   * (standard `git commit --amend`); unstaged changes are left untouched.
+   * - keepMessage → `--no-edit` (reuse the existing message)
+   * - otherwise the (required) message replaces it via `-m`
+   * - resetDate → `--date=now` (author date to now)
+   * - resetAuthor → `--reset-author` (author identity + date to the current user/now)
+   * - only → `--only` (amend message/metadata only; do NOT fold staged changes in)
+   */
+  async amendCommit(options?: { message?: string; keepMessage?: boolean; resetDate?: boolean; resetAuthor?: boolean; only?: boolean }): Promise<void> {
+    const args = ['commit', '--amend'];
+    if (options?.only) {
+      args.push('--only');
+    }
+    if (options?.keepMessage) {
+      args.push('--no-edit');
+    } else {
+      const msg = (options?.message ?? '').trim();
+      if (!msg) {
+        throw new GitError('Commit message is required to amend', null, ['commit', '--amend']);
+      }
+      // A single -m value keeps embedded newlines verbatim (subject + body),
+      // and spawn passes it as one argv entry so no shell escaping is needed.
+      args.push('-m', msg);
+    }
+    if (options?.resetDate) {
+      args.push('--date=now');
+    }
+    if (options?.resetAuthor) {
+      args.push('--reset-author');
+    }
+    await this.exec(args);
+  }
+
   async stageFile(filePath: string): Promise<void> {
     this.assertSafePath(filePath, 'add');
     await this.exec(['add', '--', filePath]);
