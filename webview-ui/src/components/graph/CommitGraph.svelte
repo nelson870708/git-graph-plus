@@ -907,6 +907,7 @@
               }
             }}
             oncontextmenu={(e) => { if (commit.hash !== 'UNCOMMITTED') onCommitContextMenu(e, commit); }}
+            use:tooltip={commit.hash === 'UNCOMMITTED' ? t('graph.clickToOpenScm') : ''}
             role="row"
             tabindex={0}
             onkeydown={(e) => {
@@ -1043,7 +1044,7 @@
                 {#if commit.hash === 'UNCOMMITTED'}
                   {@const counts = JSON.parse(commit.body || '{}')}
                   {@const label = t('graph.uncommitted', { staged: counts.staged ?? 0, unstaged: counts.unstaged ?? 0 })}
-                  <span class="commit-subject truncate" use:tooltip={label}>{label}</span>
+                  <span class="commit-subject truncate" use:tooltip={t('graph.clickToOpenScm')}>{label}</span>
                 {:else}
                   <span class="commit-subject truncate" use:tooltip={commit.subject}>{commit.subject}</span>
                 {/if}

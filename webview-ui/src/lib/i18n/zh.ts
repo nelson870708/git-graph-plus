@@ -110,6 +110,7 @@ export const zh: Record<string, string> = {
 
   // Graph
   'graph.uncommitted': '未提交 (已暂存 {staged}, 未暂存 {unstaged})',
+  'graph.clickToOpenScm': '点击打开源代码管理',
   'graph.loading': '正在加载提交',
   'graph.noCommits': '未找到提交',
   'graph.notGitRepo': '此文件夹不是 Git 仓库。',

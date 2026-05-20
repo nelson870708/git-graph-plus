@@ -110,6 +110,7 @@ export const ko: Record<string, string> = {
 
   // Graph
   'graph.uncommitted': '커밋되지 않은 변경 (staged {staged}, unstaged {unstaged})',
+  'graph.clickToOpenScm': '클릭하여 소스 제어 열기',
   'graph.loading': 'Commit 로딩 중',
   'graph.noCommits': 'Commit을 찾을 수 없습니다',
   'graph.notGitRepo': 'Git 레포지토리가 아닙니다.',
