@@ -179,6 +179,11 @@
         // Discard stale responses from previous commit selections
         if (msg.payload.hash !== activeHash) return;
         files = msg.payload.files;
+        // Compare mode (compareCommits / compareToWorking) ships all diffs
+        // upfront with an empty hash, so lazy per-file fetching never runs for
+        // it. Store those diffs so clicking a file shows its content. Normal
+        // commit selection omits `diffs` and loads them lazily per file.
+        if (msg.payload.diffs) diffs = msg.payload.diffs;
       }
       if (msg.type === 'fileDiffData') {
         if (msg.payload.hash !== activeHash) return;
