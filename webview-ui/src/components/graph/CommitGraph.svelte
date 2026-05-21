@@ -309,6 +309,21 @@
   let container: HTMLDivElement | undefined = $state();
   let scrollTop = $state(0);
   let viewportHeight = $state(600);
+  let viewportWidth = $state(800);
+
+  // Right-side columns (author + sha + date) and the minimum width we always
+  // reserve for the commit message. These mirror the fixed column widths in the
+  // CSS below.
+  const RIGHT_COLS_WIDTH = 120 + 75 + 160;
+  const MIN_MESSAGE_WIDTH = 120;
+
+  // In huge repos (e.g. nixpkgs) hundreds of concurrent branches make the graph
+  // grow wider than the whole viewport, which would push the commit message off
+  // screen and break column alignment. Cap the graph at whatever space is left
+  // after the message + right columns; lanes beyond the cap are clipped.
+  let maxGraphWidth = $derived(
+    Math.max(120, viewportWidth - RIGHT_COLS_WIDTH - MIN_MESSAGE_WIDTH)
+  );
 
   // Scroll to search result when navigating
   $effect(() => {
@@ -331,7 +346,7 @@
     if (displayLeftMargin.length > 0) {
       let maxMargin = 0;
       for (const m of displayLeftMargin) if (m > maxMargin) maxMargin = m;
-      return Math.ceil(maxMargin * X_SCALE) + 4;
+      return Math.min(Math.ceil(maxMargin * X_SCALE) + 4, maxGraphWidth);
     }
     return 30;
   });
@@ -404,6 +419,7 @@
   function handleResize() {
     if (container) {
       viewportHeight = container.clientHeight;
+      viewportWidth = container.clientWidth;
     }
   }
 
@@ -785,6 +801,7 @@
   $effect(() => {
     if (container) {
       viewportHeight = container.clientHeight;
+      viewportWidth = container.clientWidth;
     }
   });
 </script>
@@ -821,7 +838,7 @@
       <svg
         class="graph-lines"
         width={graphWidth}
-        style="position: absolute; top: 0; height: {totalHeight}px; overflow: visible;"
+        style="position: absolute; top: 0; height: {totalHeight}px; overflow: hidden;"
       >
         <!-- Paths: continuous branch lines -->
         {#each visiblePaths as path}
@@ -958,7 +975,7 @@
               }
             }}
           >
-            <div class="col-message" style="padding-left: {(displayLeftMargin[index] ?? graphWidth) * X_SCALE + 4}px;">
+            <div class="col-message" style="padding-left: {Math.min((displayLeftMargin[index] ?? graphWidth) * X_SCALE + 4, maxGraphWidth)}px;">
               {#if currentBranchLocalOnly.has(commit.hash)}
                 <span class="local-dot" use:tooltip={t('graph.notPushed')}></span>
               {:else if currentBranchRemoteAhead.has(commit.hash)}
@@ -1087,10 +1104,10 @@
                   <span class="commit-subject truncate" use:tooltip={commit.subject}>{commit.subject}</span>
                 {/if}
             </div>
-              <div class="col-author truncate" use:tooltip={commit.author.name}>
+              <div class="col-author" use:tooltip={commit.author.name}>
                 {#if commit.hash !== 'UNCOMMITTED'}
                   <img class="avatar-sm" src={getGravatarUrl(commit.author.email, 20)} alt="" loading="lazy" />
-                  {commit.author.name}
+                  <span class="author-name truncate">{commit.author.name}</span>
                 {/if}
               </div>
               <div class="col-hash" use:tooltip={commit.hash !== 'UNCOMMITTED' ? commit.hash : ''}>{commit.hash !== 'UNCOMMITTED' ? commit.abbreviatedHash : ''}</div>
@@ -1462,6 +1479,11 @@
     flex-shrink: 0;
   }
 
+  /* Flex item must allow shrinking below content size for ellipsis to engage. */
+  .author-name {
+    min-width: 0;
+  }
+
   .commit-row.selected .col-author,
   .commit-row.selected .col-date,
   .commit-row.selected .col-hash {
@@ -1475,7 +1497,7 @@
     padding: 0 10px;
     color: var(--text-secondary);
     white-space: nowrap;
-    text-align: right;
+    text-align: left;
   }
 
   .col-hash {
@@ -1484,6 +1506,11 @@
     padding: 0 10px;
     font-family: var(--vscode-editor-font-family, monospace);
     color: var(--text-secondary);
+    /* Large repos abbreviate hashes to 10-12 chars; clip so they never spill
+       into the date column. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .commit-subject {
