@@ -396,6 +396,51 @@
     }
   }
 
+  // Cap how many diff lines we render to the DOM at once. A very large diff
+  // (lockfiles, generated files, mass deletions) would otherwise create tens of
+  // thousands of nodes on open and freeze the panel. Past the cap we render the
+  // first N lines and offer a "show full diff" button — same opt-in philosophy
+  // as MAX_HIGHLIGHT_LINES. Side-by-side roughly doubles the node count, so the
+  // cap is deliberately below the highlight cap.
+  const MAX_RENDER_LINES = 3000;
+  let showFullDiff = $state(false);
+
+  // Reset the toggle whenever the selected file changes, so opening a new large
+  // diff starts collapsed even if the previous one was expanded.
+  $effect(() => {
+    selectedFile; activeHash;
+    showFullDiff = false;
+  });
+
+  let totalDiffLines = $derived(
+    selectedDiff && !selectedDiff.isBinary
+      ? selectedDiff.hunks.reduce((s, h) => s + h.lines.length, 0)
+      : 0
+  );
+  let diffTruncated = $derived(!showFullDiff && totalDiffLines > MAX_RENDER_LINES);
+
+  // Hunks actually handed to the template. When truncated, include whole hunks
+  // until the line budget runs out, slicing the final partial hunk. The sliced
+  // hunk keeps its original `oldStart` and the first-N line indices, so the
+  // highlight-cache keys (`${oldStart}-${lineIndex}`) still line up.
+  let renderHunks = $derived.by(() => {
+    if (!selectedDiff || selectedDiff.isBinary) return [];
+    if (!diffTruncated) return selectedDiff.hunks;
+    const out: typeof selectedDiff.hunks = [];
+    let budget = MAX_RENDER_LINES;
+    for (const hunk of selectedDiff.hunks) {
+      if (budget <= 0) break;
+      if (hunk.lines.length <= budget) {
+        out.push(hunk);
+        budget -= hunk.lines.length;
+      } else {
+        out.push({ ...hunk, lines: hunk.lines.slice(0, budget) });
+        budget = 0;
+      }
+    }
+    return out;
+  });
+
   const MAX_HIGHLIGHT_LINES = 5000;
 
   $effect(() => {
@@ -829,13 +874,19 @@
           </div>
 
           <div class="diff-panel">
+          {#if diffTruncated}
+            <div class="diff-truncated-banner">
+              <span>{t('details.diffTruncated', { shown: MAX_RENDER_LINES, total: totalDiffLines })}</span>
+              <button onclick={() => { showFullDiff = true; }}>{t('details.showFullDiff')}</button>
+            </div>
+          {/if}
           {#if selectedDiff.isBinary && selectedDiff.isImage}
             <ImageDiff file={selectedDiff.file} staged={false} commitHash={commit?.hash ?? ''} />
           {:else if selectedDiff.isBinary}
             <div class="diff-empty">{t('details.binaryFile')}</div>
           {:else if diffMode === 'inline'}
             <div class="diff-content">
-              {#each selectedDiff.hunks as hunk, hunkIdx}
+              {#each renderHunks as hunk, hunkIdx}
                 {#if hunkIdx > 0}<div class="hunk-separator" aria-hidden="true"></div>{/if}
                 {#each hunk.lines as line, lineIndex}
                   <div class="diff-line diff-{line.type}">
@@ -851,7 +902,7 @@
             <div class="diff-sbs">
               <div class="sbs-pane sbs-left" bind:this={sbsLeftEl} onscroll={handleSbsScroll}>
                 <div class="sbs-inner">
-                  {#each selectedDiff.hunks as hunk, hunkIdx}
+                  {#each renderHunks as hunk, hunkIdx}
                     {#if hunkIdx > 0}<div class="hunk-separator" aria-hidden="true"></div>{/if}
                     {#each hunk.lines as line, lineIndex}
                       {#if line.type === 'context' || line.type === 'delete'}
@@ -871,7 +922,7 @@
               </div>
               <div class="sbs-pane sbs-right" bind:this={sbsRightEl} onscroll={handleSbsScroll}>
                 <div class="sbs-inner">
-                  {#each selectedDiff.hunks as hunk, hunkIdx}
+                  {#each renderHunks as hunk, hunkIdx}
                     {#if hunkIdx > 0}<div class="hunk-separator" aria-hidden="true"></div>{/if}
                     {#each hunk.lines as line, lineIndex}
                       {#if line.type === 'context' || line.type === 'add'}
@@ -1436,6 +1487,33 @@
     padding: 20px;
     text-align: center;
     color: var(--text-secondary);
+  }
+
+  .diff-truncated-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--vscode-editorWidget-background, rgba(128, 128, 128, 0.08));
+    border-bottom: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.2));
+  }
+
+  .diff-truncated-banner button {
+    flex-shrink: 0;
+    padding: 2px 10px;
+    cursor: pointer;
+    color: var(--vscode-button-foreground, #fff);
+    background: var(--vscode-button-background, #0e639c);
+    border: none;
+    border-radius: 2px;
+    font-size: 12px;
+  }
+
+  .diff-truncated-banner button:hover {
+    background: var(--vscode-button-hoverBackground, #1177bb);
   }
 
   /* Side-by-side */

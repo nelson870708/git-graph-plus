@@ -227,6 +227,8 @@ export const ko: Record<string, string> = {
   'details.inline': '인라인',
   'details.sideBySide': '나란히 보기',
   'details.binaryFile': '바이너리 파일',
+  'details.diffTruncated': '큰 diff: 전체 {total}줄 중 {shown}줄 표시',
+  'details.showFullDiff': '전체 diff 보기',
   'details.nestedRepoLabel': '하위 저장소',
   'details.nestedRepoHint': 'submodule로 등록되지 않은 하위 git 저장소입니다. 상위 저장소에서 내부 변경 사항을 추적할 수 없습니다.',
   'details.selectCommit': '커밋을 선택하여 상세 정보 보기',

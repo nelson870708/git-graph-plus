@@ -227,6 +227,8 @@ export const zh: Record<string, string> = {
   'details.inline': '内联',
   'details.sideBySide': '并排',
   'details.binaryFile': '二进制文件',
+  'details.diffTruncated': '大型差异：显示 {total} 行中的 {shown} 行',
+  'details.showFullDiff': '显示完整差异',
   'details.nestedRepoLabel': '嵌套仓库',
   'details.nestedRepoHint': '这是一个未注册为子模块的嵌套 git 仓库。无法从父仓库追踪其内容。',
   'details.selectCommit': '选择一个提交以查看详情',

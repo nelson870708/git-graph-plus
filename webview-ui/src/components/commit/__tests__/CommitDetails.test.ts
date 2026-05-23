@@ -816,3 +816,51 @@ describe('CommitDetails — fullRefresh while UNCOMMITTED', () => {
     });
   });
 });
+
+describe('CommitDetails — large diff render cap', () => {
+  const MAX_RENDER_LINES = 3000;
+
+  function bigDiff(file: string, lineCount: number): DiffData {
+    const lines = Array.from({ length: lineCount }, (_, i) => ({
+      type: 'add' as const, content: `line ${i}`, newLineNumber: i + 1,
+    }));
+    return {
+      file, isBinary: false, isImage: false,
+      hunks: [{ header: '', oldStart: 1, oldLines: 0, newStart: 1, newLines: lineCount, lines }],
+    };
+  }
+
+  async function selectFileWithDiff(diff: DiffData) {
+    const r = render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    deliverCommitDiff('h1', [{ path: diff.file, status: 'M' }]);
+    const changesTab = Array.from(r.container.querySelectorAll<HTMLButtonElement>('.top-tab'))
+      .find(t => /change/i.test(t.textContent ?? ''))!;
+    await fireEvent.click(changesTab);
+    await waitFor(() => r.container.querySelector('.file-item'));
+    await fireEvent.click(r.container.querySelector<HTMLButtonElement>('.file-item')!);
+    deliverFileDiff('h1', diff.file, diff);
+    await waitFor(() => r.container.querySelector('.diff-toolbar'));
+    return r;
+  }
+
+  it('renders all lines and no banner when under the cap', async () => {
+    const { container } = await selectFileWithDiff(bigDiff('small.ts', 100));
+    await waitFor(() => container.querySelectorAll('.diff-content .diff-line').length === 100);
+    expect(container.querySelector('.diff-truncated-banner')).toBeNull();
+  });
+
+  it('caps rendered lines and shows the banner when over the cap', async () => {
+    const { container } = await selectFileWithDiff(bigDiff('huge.ts', MAX_RENDER_LINES + 500));
+    await waitFor(() => container.querySelector('.diff-truncated-banner'));
+    expect(container.querySelectorAll('.diff-content .diff-line').length).toBe(MAX_RENDER_LINES);
+  });
+
+  it('renders every line after clicking "show full diff"', async () => {
+    const total = MAX_RENDER_LINES + 500;
+    const { container } = await selectFileWithDiff(bigDiff('huge.ts', total));
+    await waitFor(() => container.querySelector('.diff-truncated-banner'));
+    await fireEvent.click(container.querySelector<HTMLButtonElement>('.diff-truncated-banner button')!);
+    await waitFor(() => container.querySelectorAll('.diff-content .diff-line').length === total);
+    expect(container.querySelector('.diff-truncated-banner')).toBeNull();
+  });
+});
