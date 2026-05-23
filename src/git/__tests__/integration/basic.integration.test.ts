@@ -55,6 +55,34 @@ describe('GitService integration — basic queries', () => {
       expect(mergeCommit.parents).toContain(mainTip);
       expect(mergeCommit.parents).toContain(featureTip);
     });
+
+    it('prepends an UNCOMMITTED row carrying the staged/unstaged counts', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'a\n', 'b.txt': 'b\n' });
+      const { writeFileSync } = await import('fs');
+      writeFileSync(`${repo.path}/a.txt`, 'staged\n');
+      runGit(repo.path, ['add', 'a.txt']);     // 1 staged
+      writeFileSync(`${repo.path}/b.txt`, 'unstaged\n'); // 1 unstaged
+
+      const commits = await svc.log();
+      expect(commits[0].hash).toBe('UNCOMMITTED');
+      expect(commits[0].subject).toBe('Uncommitted changes (2)');
+      expect(JSON.parse(commits[0].body)).toEqual({ staged: 1, unstaged: 1 });
+    });
+
+    it('scopes history to the given branches filter', async () => {
+      // main: init -> m2 ; feature (from init): f1
+      const init = commit(repo.path, 'init', { 'a.txt': 'a\n' });
+      commit(repo.path, 'm2', { 'm.txt': 'm\n' });
+      runGit(repo.path, ['checkout', '-b', 'feature', init]);
+      commit(repo.path, 'f1', { 'f.txt': 'f\n' });
+      runGit(repo.path, ['checkout', 'main']);
+
+      const subjects = (await svc.log({ branches: ['feature'] })).map(c => c.subject);
+      // feature reaches init + f1, but not main-only m2.
+      expect(subjects).toContain('f1');
+      expect(subjects).toContain('init');
+      expect(subjects).not.toContain('m2');
+    });
   });
 
   describe('branches', () => {
@@ -149,6 +177,30 @@ describe('GitService integration — basic queries', () => {
       expect(result.staged.map(s => s.path)).toContain('a.txt');
       expect(result.unstaged.map(s => s.path)).toContain('b.txt');
     });
+
+    it('marks an untracked nested git repo with status N (not a plain untracked)', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'a\n' });
+      // A nested repo git refuses to descend into surfaces as one dir entry
+      // with a trailing slash in porcelain output.
+      const nested = `${repo.path}/sub`;
+      runGit(repo.path, ['init', nested]);
+      const { writeFileSync } = await import('fs');
+      writeFileSync(`${nested}/x.txt`, 'x\n');
+
+      const result = await svc.getUncommittedDiff();
+      const sub = result.unstaged.find(e => e.path === 'sub');
+      expect(sub).toBeDefined();
+      expect(sub!.status).toBe('N');
+    });
+
+    it('reports the new path of a staged rename', async () => {
+      commit(repo.path, 'init', { 'old.txt': 'content\n' });
+      runGit(repo.path, ['mv', 'old.txt', 'new.txt']);
+
+      const result = await svc.getUncommittedDiff();
+      // Staged rename → the new path appears in the staged list.
+      expect(result.staged.map(s => s.path)).toContain('new.txt');
+    });
   });
 
   describe('getReflog', () => {
@@ -186,6 +238,18 @@ describe('GitService integration — basic queries', () => {
       const paths = files.map(f => f.path);
       expect(paths).toContain('b.txt');
     });
+
+    it('reports a rename with its old path and R status', async () => {
+      const c1 = commit(repo.path, 'init', { 'old.txt': 'shared content here\n' });
+      runGit(repo.path, ['mv', 'old.txt', 'new.txt']);
+      commit(repo.path, 'rename');
+
+      const files = await svc.diffFiles(c1, 'HEAD');
+      const renamed = files.find(f => f.path === 'new.txt');
+      expect(renamed).toBeDefined();
+      expect(renamed!.status).toBe('R');
+      expect(renamed!.oldPath).toBe('old.txt');
+    });
   });
 
   describe('showCommitFiles', () => {
@@ -207,6 +271,17 @@ describe('GitService integration — basic queries', () => {
       const paths = files.map(f => f.path);
       expect(paths).toContain('a.txt');
       expect(paths).toContain('b.txt');
+    });
+
+    it('reports a rename within a commit with R status and old path', async () => {
+      commit(repo.path, 'init', { 'old.txt': 'shared content here\n' });
+      runGit(repo.path, ['mv', 'old.txt', 'new.txt']);
+      const target = commit(repo.path, 'rename');
+
+      const renamed = (await svc.showCommitFiles(target)).find(f => f.path === 'new.txt');
+      expect(renamed).toBeDefined();
+      expect(renamed!.status).toBe('R');
+      expect(renamed!.oldPath).toBe('old.txt');
     });
 
     it('unions files across all parents of an octopus (3-parent) merge', async () => {
@@ -293,6 +368,23 @@ describe('GitService integration — basic queries', () => {
       const diffs = await svc.showCommitDiff(mergeHash, 'from-side.txt');
       expect(diffs.length).toBeGreaterThan(0);
       expect(diffs[0].hunks.length).toBeGreaterThan(0);
+    });
+
+    it('flags a binary file with isBinary and no hunks', async () => {
+      commit(repo.path, 'init', { 'readme.txt': 'text\n' });
+      const { writeFileSync } = await import('fs');
+      const { head } = await import('./helpers');
+      // NUL bytes make git treat the blob as binary ("Binary files differ").
+      // Written + committed by hand because the helper only writes text.
+      writeFileSync(`${repo.path}/blob.bin`, Buffer.from([0, 1, 2, 0, 255, 0, 10]));
+      runGit(repo.path, ['add', '-A']);
+      runGit(repo.path, ['commit', '-m', 'add binary']);
+      const target = head(repo.path);
+
+      const diff = (await svc.showCommitDiff(target)).find(d => d.file === 'blob.bin');
+      expect(diff).toBeDefined();
+      expect(diff!.isBinary).toBe(true);
+      expect(diff!.hunks).toHaveLength(0);
     });
   });
 

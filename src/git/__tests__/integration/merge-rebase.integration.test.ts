@@ -59,6 +59,23 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       const cleared = await svc.getOperationState();
       expect(cleared.type).toBeNull();
     });
+
+    it('squash merge collapses the branch into a single non-merge commit', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'a\n' });
+      const mainBase = head(repo.path);
+      runGit(repo.path, ['checkout', '-b', 'topic']);
+      commit(repo.path, 'topic 1', { 'b.txt': 'b\n' });
+      commit(repo.path, 'topic 2', { 'c.txt': 'c\n' });
+      runGit(repo.path, ['checkout', 'main']);
+
+      await svc.merge('topic', { squash: true });
+      // squash → a fresh single-parent commit (no merge commit), parented on main.
+      const parents = runGit(repo.path, ['log', '-1', '--format=%P']).trim().split(/\s+/).filter(Boolean);
+      expect(parents).toEqual([mainBase]);
+      // Both topic files landed.
+      const files = runGit(repo.path, ['show', '--name-only', '--format=', 'HEAD']).trim().split('\n');
+      expect(files).toEqual(expect.arrayContaining(['b.txt', 'c.txt']));
+    });
   });
 
   describe('rebase', () => {
@@ -131,6 +148,20 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       const { staged } = await svc.getUncommittedDiff();
       expect(staged.some(s => s.path === 'feat.txt')).toBe(true);
     });
+
+    it('leaves a cherry-pick in progress on conflict (detectable + abortable)', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'feature']);
+      const conflicting = commit(repo.path, 'feature edit', { 'a.txt': 'feature\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main edit', { 'a.txt': 'main\n' });
+
+      await expect(svc.cherryPick(conflicting)).rejects.toThrow();
+      expect((await svc.getOperationState()).type).toBe('cherry-pick');
+
+      await svc.abortOperation();
+      expect((await svc.getOperationState()).type).toBeNull();
+    });
   });
 
   describe('revert', () => {
@@ -157,6 +188,19 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       expect(head(repo.path)).toBe(beforeTip);
       const { staged } = await svc.getUncommittedDiff();
       expect(staged.some(s => s.path === 'a.txt')).toBe(true);
+    });
+
+    it('leaves a revert in progress on conflict (detectable + abortable)', async () => {
+      // Revert an old commit whose lines have since changed → conflict.
+      commit(repo.path, 'init', { 'a.txt': 'one\n' });
+      const target = commit(repo.path, 'second', { 'a.txt': 'two\n' });
+      commit(repo.path, 'third', { 'a.txt': 'three\n' });
+
+      await expect(svc.revert(target)).rejects.toThrow();
+      expect((await svc.getOperationState()).type).toBe('revert');
+
+      await svc.abortOperation();
+      expect((await svc.getOperationState()).type).toBeNull();
     });
   });
 

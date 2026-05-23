@@ -281,6 +281,20 @@ describe('GitService integration — state mutations', () => {
       const stashes = await svc.stashList();
       expect(stashes[0].message).toContain('renamed message');
     });
+
+    it('stashSave with keepIndex creates a stash but leaves staged changes in place', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      writeFileSync(join(repo.path, 'a.txt'), 'staged change\n');
+      runGit(repo.path, ['add', 'a.txt']);
+      const before = (await svc.stashList()).length;
+
+      await svc.stashSave('keep', false, true); // keepIndex → --keep-index
+
+      expect((await svc.stashList()).length).toBe(before + 1);
+      // --keep-index restores the staged content to the working tree.
+      const { staged } = await svc.getUncommittedDiff();
+      expect(staged.map(s => s.path)).toContain('a.txt');
+    });
   });
 
   describe('reset', () => {
@@ -309,6 +323,21 @@ describe('GitService integration — state mutations', () => {
       expect(head(repo.path)).toBe(c2);
       const { readFileSync } = await import('fs');
       expect(readFileSync(join(repo.path, 'a.txt'), 'utf-8')).toBe('2\n');
+    });
+
+    it('mixed reset moves HEAD and unstages, but keeps the working tree', async () => {
+      commit(repo.path, 'first', { 'a.txt': '1\n' });
+      const c1 = head(repo.path);
+      commit(repo.path, 'second', { 'a.txt': '2\n' });
+
+      await svc.reset(c1, 'mixed');
+      expect(head(repo.path)).toBe(c1);
+      const { readFileSync } = await import('fs');
+      // Working tree keeps the "second" content…
+      expect(readFileSync(join(repo.path, 'a.txt'), 'utf-8')).toBe('2\n');
+      // …but the index was reset, so it shows up as an unstaged change.
+      const { unstaged } = await svc.getUncommittedDiff();
+      expect(unstaged.map(s => s.path)).toContain('a.txt');
     });
   });
 

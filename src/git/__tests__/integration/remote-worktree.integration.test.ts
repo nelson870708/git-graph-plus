@@ -56,6 +56,21 @@ describe('GitService integration — remote operations (local bare)', () => {
       }
     });
 
+    it('fetch with prune removes remote-tracking refs deleted on the remote', async () => {
+      await svc.push('origin', 'main', { setUpstream: true });
+      // Publish a throwaway branch, fetch it, then delete it on the remote.
+      runGit(workRepo.path, ['branch', 'temp']);
+      runGit(workRepo.path, ['push', 'origin', 'temp']);
+      await svc.fetch('origin');
+      expect(() => runGit(workRepo.path, ['rev-parse', 'refs/remotes/origin/temp'])).not.toThrow();
+
+      runGit(bareRepo.path, ['update-ref', '-d', 'refs/heads/temp']); // delete on remote
+      await svc.fetch('origin', { prune: true });
+
+      const remoteRefs = runGit(workRepo.path, ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin']);
+      expect(remoteRefs).not.toContain('origin/temp');
+    });
+
     it('pull --rebase replays local commits on top of fetched remote', async () => {
       await svc.push('origin', 'main', { setUpstream: true });
 
@@ -114,6 +129,22 @@ describe('GitService integration — remote operations (local bare)', () => {
       expect(remoteTags).toContain('v0.1');
       expect(remoteTags).toContain('v0.2');
     });
+
+    it('pushTagToAllRemotes pushes the tag to every configured remote', async () => {
+      const mirror = createTempRepo({ bare: true });
+      try {
+        runGit(workRepo.path, ['remote', 'add', 'mirror', mirror.path]);
+        runGit(workRepo.path, ['tag', 'v3.0']);
+
+        await svc.pushTagToAllRemotes('v3.0');
+
+        const tip = head(workRepo.path);
+        expect(runGit(bareRepo.path, ['rev-parse', 'refs/tags/v3.0']).trim()).toBe(tip);
+        expect(runGit(mirror.path, ['rev-parse', 'refs/tags/v3.0']).trim()).toBe(tip);
+      } finally {
+        mirror.cleanup();
+      }
+    });
   });
 
   describe('deleteRemoteBranch', () => {
@@ -156,6 +187,30 @@ describe('GitService integration — remote operations (local bare)', () => {
       // And upstream tracking should be set.
       const upstream = runGit(workRepo.path, ['rev-parse', '--abbrev-ref', 'fresh-topic@{upstream}']).trim();
       expect(upstream).toBe('origin/fresh-topic');
+    });
+  });
+
+  describe('log remoteFilter', () => {
+    it('excludes remote-only commits with the "local" filter but includes them for the remote', async () => {
+      await svc.push('origin', 'main', { setUpstream: true });
+      // A second clone advances origin/main with a commit that is NOT local.
+      const otherRepo = createTempRepo();
+      try {
+        runGit(otherRepo.path, ['remote', 'add', 'origin', bareRepo.path]);
+        runGit(otherRepo.path, ['fetch', 'origin']);
+        runGit(otherRepo.path, ['checkout', '-b', 'main', 'origin/main']);
+        commit(otherRepo.path, 'remote-only', { 'r.txt': 'r\n' });
+        runGit(otherRepo.path, ['push', 'origin', 'main']);
+        await svc.fetch('origin'); // origin/main now ahead of local main
+
+        const localOnly = (await svc.log({ remoteFilter: ['local'] })).map(c => c.subject);
+        expect(localOnly).not.toContain('remote-only');
+
+        const withRemote = (await svc.log({ remoteFilter: ['origin'] })).map(c => c.subject);
+        expect(withRemote).toContain('remote-only');
+      } finally {
+        otherRepo.cleanup();
+      }
     });
   });
 });
@@ -210,6 +265,17 @@ describe('GitService integration — worktrees', () => {
       // Branch is now reported by branches()
       const branchNames = (await svc.branches()).map(b => b.name);
       expect(branchNames).toContain('feature-wt');
+    });
+
+    it('adds a detached worktree at a commit and reports detached:true', async () => {
+      const wtPath = siblingPath('wt-detached');
+      // Passing a commit (not a new branch) checks it out detached.
+      await svc.worktreeAdd(wtPath, head(mainRepo.path));
+
+      const detached = (await svc.worktreeList()).find(w => !w.isMain);
+      expect(detached).toBeDefined();
+      expect(detached!.detached).toBe(true);
+      expect(detached!.branch).toBe('');
     });
 
     it('worktreeRemove drops it', async () => {
