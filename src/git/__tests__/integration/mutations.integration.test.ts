@@ -361,4 +361,42 @@ describe('GitService integration — state mutations', () => {
       expect((await svc.remotes()).find(r => r.name === 'origin')).toBeUndefined();
     });
   });
+
+  describe('fastForwardRef (update a non-current branch in place)', () => {
+    it('fast-forwards a non-current branch without touching HEAD or the working tree', async () => {
+      // topic branches off init, then main advances past it. topic is a strict
+      // ancestor of main → the update is a fast-forward.
+      const init = commit(repo.path, 'init', { 'a.txt': 'a\n' });
+      runGit(repo.path, ['branch', 'topic', init]);
+      const mainTip = commit(repo.path, 'main second', { 'b.txt': 'b\n' });
+      // We stay on main; topic is the non-current branch being advanced.
+      expect(currentBranch(repo.path)).toBe('main');
+      writeFileSync(join(repo.path, 'dirty.txt'), 'uncommitted\n');
+
+      await svc.fastForwardRef('topic', 'main');
+
+      // topic now points at main's tip…
+      expect(runGit(repo.path, ['rev-parse', 'topic']).trim()).toBe(mainTip);
+      // …while HEAD stays on main and the working-tree edit is untouched.
+      expect(currentBranch(repo.path)).toBe('main');
+      expect(head(repo.path)).toBe(mainTip);
+      expect(existsSync(join(repo.path, 'dirty.txt'))).toBe(true);
+    });
+
+    it('rejects a non-fast-forward update so diverged commits are never clobbered', async () => {
+      // init → main adds m1; topic (from init) adds its own t1. The histories
+      // diverge, so advancing topic to main is NOT a fast-forward and the
+      // `+`-less refspec must make git refuse it.
+      const init = commit(repo.path, 'init', { 'a.txt': 'a\n' });
+      runGit(repo.path, ['branch', 'topic', init]);
+      commit(repo.path, 'main m1', { 'm.txt': 'm\n' });
+      runGit(repo.path, ['checkout', 'topic']);
+      const topicTip = commit(repo.path, 'topic t1', { 't.txt': 't\n' });
+      runGit(repo.path, ['checkout', 'main']);
+
+      await expect(svc.fastForwardRef('topic', 'main')).rejects.toThrow();
+      // topic is unchanged — its own commit survived.
+      expect(runGit(repo.path, ['rev-parse', 'topic']).trim()).toBe(topicTip);
+    });
+  });
 });

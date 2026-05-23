@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatGitError } from '../git-error-formatter';
+import { formatGitError, isAuthFailure, transportFromRemoteUrl } from '../git-error-formatter';
 
 describe('formatGitError', () => {
   describe('prefix stripping', () => {
@@ -97,5 +97,42 @@ describe('formatGitError', () => {
       expect(formatGitError('Could not apply abc1234... some commit message'))
         .toBe('Could not apply abc1234... some commit message');
     });
+  });
+});
+
+describe('isAuthFailure', () => {
+  it.each([
+    'fatal: Authentication failed for \'https://github.com/x/y.git/\'',
+    'fatal: could not read Username for \'https://github.com\': terminal prompts disabled',
+    'git@github.com: Permission denied (publickey).',
+    'Host key verification failed.',
+    'fatal: Could not read from remote repository.',
+  ])('flags credential/auth failures: %s', (stderr) => {
+    expect(isAuthFailure(stderr)).toBe(true);
+  });
+
+  it.each([
+    'fatal: not a git repository',
+    'error: failed to push some refs',
+    'CONFLICT (content): Merge conflict in a.txt',
+  ])('does not flag unrelated errors: %s', (stderr) => {
+    expect(isAuthFailure(stderr)).toBe(false);
+  });
+});
+
+describe('transportFromRemoteUrl', () => {
+  it('classifies SSH urls', () => {
+    expect(transportFromRemoteUrl('git@github.com:org/repo.git')).toBe('ssh');
+    expect(transportFromRemoteUrl('ssh://git@host/repo.git')).toBe('ssh');
+  });
+
+  it('classifies HTTP(S) urls', () => {
+    expect(transportFromRemoteUrl('https://github.com/org/repo.git')).toBe('https');
+    expect(transportFromRemoteUrl('http://host/repo.git')).toBe('https');
+  });
+
+  it('returns unknown for anything else (incl. empty)', () => {
+    expect(transportFromRemoteUrl('')).toBe('unknown');
+    expect(transportFromRemoteUrl('file:///srv/repo.git')).toBe('unknown');
   });
 });

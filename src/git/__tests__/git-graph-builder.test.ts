@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { buildGraph, buildFullGraph } from '../git-graph-builder';
-import type { Commit, Ref } from '../types';
+import type { Commit, Ref, BranchInfo } from '../types';
+
+function branch(name: string, hash: string, over: Partial<BranchInfo> = {}): BranchInfo {
+  return { name, current: false, ahead: 0, behind: 0, hash, ...over };
+}
 
 function makeCommit(hash: string, parents: string[] = [], refs: Ref[] = []): Commit {
   return {
@@ -259,5 +263,91 @@ describe('buildFullGraph color palette exhaustion', () => {
     }
     const colors = graph.paths.map(p => p.color);
     expect(new Set(colors).size).toBeLessThan(colors.length);
+  });
+});
+
+describe('buildFullGraph upstream-based remote-only detection', () => {
+  it('uses upstream tracking (not just name) to find the matching local branch', () => {
+    // The local branch is named "dev" but tracks "origin/main", so a name-only
+    // match would miss it. Passing branches with `upstream` set exercises
+    // buildUpstreamMap, which maps "origin/main" → the local branch's hash.
+    const commits = [
+      makeCommit('r2', ['r1'], [{ type: 'remote-branch', name: 'main', remote: 'origin' }]),
+      makeCommit('r1', ['l1']),
+      makeCommit('l1', [], [{ type: 'branch', name: 'dev' }]),
+    ];
+    const branches = [branch('dev', 'l1', { upstream: 'origin/main' })];
+    const graph = buildFullGraph(commits, branches);
+    // r2 (origin/main tip) and r1 are ahead of the local branch → remote-only.
+    expect(graph.dots[0].remoteTip).toBe(true);   // r2
+    expect(graph.dots[2].remoteTip).toBe(false);  // l1 (local "dev")
+  });
+
+  it('falls back to name matching when no upstream is configured', () => {
+    const commits = [
+      makeCommit('r2', ['r1'], [{ type: 'remote-branch', name: 'feature', remote: 'origin' }]),
+      makeCommit('r1', ['l1']),
+      makeCommit('l1', [], [{ type: 'branch', name: 'feature' }]),
+    ];
+    // Branch with no upstream → buildUpstreamMap stays empty, name fallback used.
+    const graph = buildFullGraph(commits, [branch('feature', 'l1')]);
+    expect(graph.dots[0].remoteTip).toBe(true);
+    expect(graph.dots[2].remoteTip).toBe(false);
+  });
+});
+
+describe('buildFullGraph lane geometry', () => {
+  it('builds bending paths when lanes are created and collapse', () => {
+    // A feature branch forks off main, runs in parallel, then merges back.
+    // This forces lanes to shift columns (pass/goto on a non-origin column),
+    // so paths must contain bends rather than a single straight segment.
+    //
+    //   m4 (main)   [m3]
+    //   m3 (merge)  [m2, f2]   ← feature merges back into main
+    //   f2          [f1]
+    //   m2          [m1]
+    //   f1          [m1]       ← feature forked from m1
+    //   m1          [m0]
+    //   m0 (root)   []
+    const commits = [
+      makeCommit('m4', ['m3']),
+      makeCommit('m3', ['m2', 'f2']),
+      makeCommit('f2', ['f1']),
+      makeCommit('m2', ['m1']),
+      makeCommit('f1', ['m1']),
+      makeCommit('m1', ['m0']),
+      makeCommit('m0', []),
+    ];
+    const graph = buildFullGraph(commits);
+
+    expect(graph.dots).toHaveLength(7);
+    // The merge commit (m3) is a multi-parent node.
+    expect(graph.dots[1].type).toBe('merge');
+    // At least one path bends: it has points spanning more than one X column.
+    const hasBend = graph.paths.some(p => {
+      const xs = new Set(p.points.map(pt => pt.x));
+      return xs.size > 1;
+    });
+    expect(hasBend).toBe(true);
+    // Every dot lands on a valid (finite, non-negative) coordinate.
+    for (const dot of graph.dots) {
+      expect(Number.isFinite(dot.center.x)).toBe(true);
+      expect(dot.center.x).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('keeps multiple concurrent lanes distinct without overlap at the fork row', () => {
+    // Two independent branches off a shared root produce two separate rails
+    // that must occupy different columns.
+    const commits = [
+      makeCommit('a2', ['a1'], [{ type: 'branch', name: 'a' }]),
+      makeCommit('b2', ['b1'], [{ type: 'branch', name: 'b' }]),
+      makeCommit('a1', ['root']),
+      makeCommit('b1', ['root']),
+      makeCommit('root', []),
+    ];
+    const graph = buildFullGraph(commits);
+    // a2 and b2 are tips of distinct branches → different columns.
+    expect(graph.dots[0].center.x).not.toBe(graph.dots[1].center.x);
   });
 });

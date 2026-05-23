@@ -1,3 +1,21 @@
+/** Fragments git emits when a remote operation fails for credential reasons.
+ *  Used to decide whether to surface the credential-help UI. SSH-key failures
+ *  (`Permission denied (publickey)`, `Host key verification failed`) are
+ *  included because the UI still has useful SSH guidance for them. */
+const AUTH_FAILURE_RE = /terminal prompts disabled|Authentication failed|could not read Username|could not read Password|Permission denied.*publickey|Host key verification failed|Could not read from remote/;
+
+export function isAuthFailure(stderr: string): boolean {
+  return AUTH_FAILURE_RE.test(stderr);
+}
+
+/** Classify a remote URL's transport so the UI can show the right hint
+ *  (SSH key vs HTTPS credential helper). */
+export function transportFromRemoteUrl(url: string): 'ssh' | 'https' | 'unknown' {
+  if (url.startsWith('git@') || url.startsWith('ssh://')) return 'ssh';
+  if (url.startsWith('https://') || url.startsWith('http://')) return 'https';
+  return 'unknown';
+}
+
 export function formatGitError(stderr: string): string {
   const rawLines = stderr.trim().split('\n');
   if (rawLines.length === 0) return stderr.trim();

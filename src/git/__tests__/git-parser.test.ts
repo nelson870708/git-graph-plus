@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLog, parseRefs, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks } from '../git-parser';
+import { parseLog, parseRefs, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks, splitUpstreamRef } from '../git-parser';
 
 
 describe('parseLog', () => {
@@ -524,6 +524,20 @@ describe('parseLfsLocks', () => {
     expect(result).toHaveLength(2);
     expect(result[0].owner).toBe('alice');
     expect(result[1].owner).toBe('bob');
+  });
+});
+
+describe('splitUpstreamRef', () => {
+  it('splits remote from a simple branch', () => {
+    expect(splitUpstreamRef('origin/main')).toEqual({ remote: 'origin', branch: 'main' });
+  });
+
+  it('keeps slashes in the branch portion (only the first segment is the remote)', () => {
+    expect(splitUpstreamRef('origin/feature/login')).toEqual({ remote: 'origin', branch: 'feature/login' });
+  });
+
+  it('handles a custom remote name', () => {
+    expect(splitUpstreamRef('upstream/release/2.0')).toEqual({ remote: 'upstream', branch: 'release/2.0' });
   });
 });
 

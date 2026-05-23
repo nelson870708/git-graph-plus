@@ -16,12 +16,16 @@ export default defineConfig({
         'src/**/types.ts',
         // vscode-bound modules — covered by manual testing of the extension,
         // not unit/integration. Excluded so the % reflects testable code.
+        // file-watcher.ts, git-content-provider.ts and the views/ tree
+        // providers were brought under test with a vscode mock, so they're no
+        // longer excluded. extension.ts (activation) and panels/ (MainPanel
+        // webview routing) remain manual-test territory.
         'src/extension.ts',
         'src/panels/**',
-        'src/views/**',
-        'src/services/file-watcher.ts',
-        'src/services/git-content-provider.ts',
-        'src/utils/**',
+        // Only message-bus.ts is type-only; the other utils (buffer-stream,
+        // sequence-guard, path-validation) have real logic + tests, so keep
+        // them in the coverage report.
+        'src/utils/message-bus.ts',
         'src/git/vscode-git-bridge.ts',
         // Webview entry + canvas-bound rendering + shiki-bound highlighter
         // are exercised manually in the running extension; not worth shimming

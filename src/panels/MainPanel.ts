@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { readFile, access } from 'fs/promises';
 import { GitService, GitError } from '../git/git-service';
-import { formatGitError } from '../git/git-error-formatter';
+import { formatGitError, isAuthFailure, transportFromRemoteUrl } from '../git/git-error-formatter';
+import { splitUpstreamRef } from '../git/git-parser';
 import { buildFullGraph } from '../git/git-graph-builder';
 import { triggerVSCodeGitAuth } from '../git/vscode-git-bridge';
 import { FileWatcher } from '../services/file-watcher';
@@ -443,8 +444,8 @@ export class MainPanel {
             const branches = await this.gitService.branches();
             const localInfo = branches.find(b => !b.remote && b.name === message.payload.name);
             if (localInfo?.upstream) {
-              const [remote, ...rest] = localInfo.upstream.split('/');
-              await this.gitService.deleteRemoteBranch(rest.join('/'), remote);
+              const { remote, branch } = splitUpstreamRef(localInfo.upstream);
+              await this.gitService.deleteRemoteBranch(branch, remote);
             } else {
               // Fallback: try origin
               try { await this.gitService.deleteRemoteBranch(message.payload.name); } catch { /* ignore */ }
@@ -1201,21 +1202,20 @@ export class MainPanel {
       }
 
       // Detect authentication errors and show a helpful message
-      if (err instanceof GitError && /terminal prompts disabled|Authentication failed|could not read Username|could not read Password|Permission denied.*publickey|Host key verification failed|Could not read from remote/.test(err.stderr)) {
+      if (err instanceof GitError && isAuthFailure(err.stderr)) {
         let remoteUrl = '';
         try {
           remoteUrl = await this.gitService.getRemoteUrl('origin');
         } catch { /* ignore */ }
 
-        const isSSH = remoteUrl.startsWith('git@') || remoteUrl.startsWith('ssh://');
-        const isHTTPS = remoteUrl.startsWith('https://') || remoteUrl.startsWith('http://');
+        const transport = transportFromRemoteUrl(remoteUrl);
 
         let msg: string;
         let hint: string;
-        if (isSSH) {
+        if (transport === 'ssh') {
           msg = vscode.l10n.t('SSH authentication failed. Check that your SSH key is configured correctly.');
           hint = 'ssh-add ~/.ssh/id_ed25519  (or your key path)';
-        } else if (isHTTPS) {
+        } else if (transport === 'https') {
           msg = vscode.l10n.t('HTTPS authentication failed. Your credentials may have expired.');
           hint = 'gh auth login  (or reconfigure your credential helper)';
         } else {

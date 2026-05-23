@@ -208,6 +208,29 @@ describe('GitService integration — basic queries', () => {
       expect(paths).toContain('a.txt');
       expect(paths).toContain('b.txt');
     });
+
+    it('unions files across all parents of an octopus (3-parent) merge', async () => {
+      // hash^..hash only diffs against the first parent, so an octopus merge
+      // would hide everything from parents 2..N. showCommitFiles must diff
+      // against every parent and union the results.
+      const { runGit, head } = await import('./helpers');
+      commit(repo.path, 'init', { 'shared.txt': 'one\n' });
+      runGit(repo.path, ['checkout', '-b', 'side1']);
+      commit(repo.path, 'side1 change', { 'from-side1.txt': 's1\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      runGit(repo.path, ['checkout', '-b', 'side2']);
+      commit(repo.path, 'side2 change', { 'from-side2.txt': 's2\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main change', { 'from-main.txt': 'm\n' });
+      // Octopus merge of both side branches at once → a 3-parent commit.
+      runGit(repo.path, ['merge', '--no-ff', '-m', 'octopus', 'side1', 'side2']);
+      const mergeHash = head(repo.path);
+
+      const paths = (await svc.showCommitFiles(mergeHash)).map(f => f.path);
+      // Files introduced via the 2nd and 3rd parents must both appear.
+      expect(paths).toContain('from-side1.txt');
+      expect(paths).toContain('from-side2.txt');
+    });
   });
 
   describe('showCommitDiff', () => {

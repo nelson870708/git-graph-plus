@@ -1312,3 +1312,165 @@ describe('App — modal cancel/close callbacks', () => {
     )).toBe(false);
   });
 });
+
+describe('App — filter change handlers', () => {
+  function lastGetLog() {
+    const msgs = globalThis.__postedMessages.filter(
+      (m) => (m.data as { type?: string }).type === 'getLog'
+    );
+    return msgs.length ? (msgs[msgs.length - 1].data as { payload: Record<string, unknown> }).payload : null;
+  }
+
+  it('selecting a branch in the branch filter posts getLog with that branch', async () => {
+    const { container } = render(App);
+    postMsg('branchData', {
+      branches: [
+        { name: 'main', current: true, ahead: 0, behind: 0, hash: 'h1' },
+        { name: 'feature', current: false, ahead: 0, behind: 0, hash: 'h2' },
+      ],
+      tags: [], remotes: [], stashes: [], worktrees: [],
+    });
+    // Branch filter is the second .filter-btn in the SearchBar.
+    await waitFor(() => container.querySelectorAll('.filter-btn').length >= 2);
+    globalThis.__postedMessages = [];
+    await fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.filter-btn')[1]);
+    const item = Array.from(container.querySelectorAll<HTMLButtonElement>('.dd-item'))
+      .find(el => el.textContent?.includes('feature'))!;
+    await fireEvent.click(item);
+    await waitFor(() => lastGetLog() !== null);
+    expect((lastGetLog()!.branches as string[])).toContain('feature');
+  });
+
+  it('selecting a remote in the source filter posts getLog with that remoteFilter', async () => {
+    const { container } = render(App);
+    postMsg('branchData', {
+      branches: [],
+      tags: [],
+      remotes: [{ name: 'origin', fetchUrl: '', pushUrl: '' }],
+      stashes: [], worktrees: [],
+    });
+    await waitFor(() => container.querySelectorAll('.filter-btn').length >= 1);
+    globalThis.__postedMessages = [];
+    await fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.filter-btn')[0]);
+    const item = Array.from(container.querySelectorAll<HTMLButtonElement>('.dd-item'))
+      .find(el => el.textContent?.includes('origin'))!;
+    await fireEvent.click(item);
+    await waitFor(() => lastGetLog() !== null);
+    expect((lastGetLog()!.remoteFilter as string[])).toContain('origin');
+  });
+
+  it('applying a remote filter cross-filters out local branches from the branch filter', async () => {
+    const { container } = render(App);
+    postMsg('branchData', {
+      branches: [{ name: 'feature', current: false, ahead: 0, behind: 0, hash: 'h1' }],
+      tags: [],
+      remotes: [{ name: 'origin', fetchUrl: '', pushUrl: '' }],
+      stashes: [], worktrees: [],
+    });
+    await waitFor(() => container.querySelectorAll('.filter-btn').length >= 2);
+    // 1) Select the local branch "feature" → branchFilter = ['feature'].
+    await fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.filter-btn')[1]);
+    const branchItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.dd-item'))
+      .find(el => el.textContent?.includes('feature'))!;
+    await fireEvent.click(branchItem);
+    // 2) Apply a remote-only source filter (no 'local'). The local "feature"
+    //    branch no longer matches, so the cross-filter must drop it.
+    globalThis.__postedMessages = [];
+    await fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.filter-btn')[0]);
+    const remoteItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.dd-item'))
+      .find(el => el.textContent?.includes('origin'))!;
+    await fireEvent.click(remoteItem);
+    await waitFor(() => lastGetLog() !== null);
+    // branchFilter emptied → getLog carries no `branches`, only the remote filter.
+    expect(lastGetLog()!.branches).toBeUndefined();
+    expect((lastGetLog()!.remoteFilter as string[])).toContain('origin');
+  });
+});
+
+describe('App — checkout-remote dirty options', () => {
+  function findCreateBranch() {
+    return globalThis.__postedMessages.find(
+      (m) => (m.data as { type?: string }).type === 'createBranch'
+    )?.data as { payload: Record<string, unknown> } | undefined;
+  }
+
+  async function submitWithOption(option: 'stash' | 'discard') {
+    render(App);
+    // dirty=true so the local-changes radios render.
+    modalStore.openCheckoutRemote('origin/feat', 'feat', true);
+    await waitFor(() => document.querySelector('.modal button.primary'));
+    await fireEvent.click(document.querySelector<HTMLInputElement>(`input[type="radio"][value="${option}"]`)!);
+    globalThis.__postedMessages = [];
+    await fireEvent.click(document.querySelector<HTMLButtonElement>('.modal button.primary')!);
+  }
+
+  it('stash option posts createBranch with stash + stashUntracked', async () => {
+    await submitWithOption('stash');
+    const req = findCreateBranch();
+    expect(req).toBeDefined();
+    expect(req!.payload).toMatchObject({ checkout: true, stash: true, stashUntracked: true });
+  });
+
+  it('discard option posts createBranch with force + clean', async () => {
+    await submitWithOption('discard');
+    const req = findCreateBranch();
+    expect(req).toBeDefined();
+    expect(req!.payload).toMatchObject({ checkout: true, force: true, clean: true });
+  });
+});
+
+describe('App — visibility-driven conflict refresh', () => {
+  it('re-requests conflict status when the webview regains focus during a conflict', async () => {
+    render(App);
+    // A conflict is in progress.
+    postMsg('conflictData', { operation: 'merge', files: [{ path: 'a.ts', resolved: false }] });
+    await waitFor(() => document.querySelector('.conflict-banner'));
+    globalThis.__postedMessages = [];
+    // Regaining focus (document not hidden) should trigger a refreshConflicts.
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => globalThis.__postedMessages.some(
+      (m) => (m.data as { type?: string }).type === 'refreshConflicts'
+    ));
+  });
+
+  it('does not refresh conflicts on focus when there is no conflict', async () => {
+    render(App);
+    await waitFor(() => globalThis.__postedMessages.length > 0);
+    globalThis.__postedMessages = [];
+    window.dispatchEvent(new Event('focus'));
+    // Give any handler a tick to run.
+    await new Promise(r => setTimeout(r, 0));
+    expect(globalThis.__postedMessages.some(
+      (m) => (m.data as { type?: string }).type === 'refreshConflicts'
+    )).toBe(false);
+  });
+});
+
+describe('App — search result highlighting', () => {
+  function commitRow(hash: string, subject: string) {
+    return {
+      hash, abbreviatedHash: hash.slice(0, 7), subject, body: '', parents: [], refs: [],
+      author: { name: '', email: '', date: '' }, committer: { name: '', email: '', date: '' },
+    };
+  }
+
+  it('highlights matched rows and navigates to the first match on search', async () => {
+    const { container } = render(App);
+    postMsg('logData', {
+      commits: [commitRow('aaaaaaa1', 'findme please'), commitRow('bbbbbbb2', 'unrelated')],
+      paths: [], links: [], dots: [], commitLeftMargin: [], graph: [], hasMore: false, currentLimit: 50,
+    });
+    const input = await waitFor(() => container.querySelector<HTMLInputElement>('.search-input')!);
+    await fireEvent.input(input, { target: { value: 'findme' } });
+    // Enter with no prior matches runs doSearch → onResults + onNavigate, which
+    // exercises App's handleSearchResults / handleSearchNavigate.
+    await fireEvent.keyDown(container.querySelector('.search-bar')!, { key: 'Enter' });
+    await waitFor(() => container.querySelector('.commit-row.search-match'));
+    // The matching row is highlighted (handleSearchResults set searchMatchedHashes).
+    expect(container.querySelector('.commit-row.search-match')).not.toBeNull();
+    // The first match is the navigation target (handleSearchNavigate set searchNavigateHash).
+    expect(container.querySelector('.commit-row.search-current')).not.toBeNull();
+    // The non-matching row is dimmed.
+    expect(container.querySelector('.commit-row.search-dim')).not.toBeNull();
+  });
+});

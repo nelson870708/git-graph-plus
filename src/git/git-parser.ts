@@ -48,6 +48,14 @@ function parseCommitRecord(record: string, remoteNames?: string[]): Commit {
   };
 }
 
+/** Split an upstream ref like "origin/feature/x" into its remote and branch.
+ *  The first path segment is the remote; everything after is the branch name,
+ *  which may itself contain slashes (e.g. "feature/x"). */
+export function splitUpstreamRef(upstream: string): { remote: string; branch: string } {
+  const [remote, ...rest] = upstream.split('/');
+  return { remote, branch: rest.join('/') };
+}
+
 export function parseRefs(refStr: string, remoteNames?: string[]): Ref[] {
   if (!refStr.trim()) {
     return [];
