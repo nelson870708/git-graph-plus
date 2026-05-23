@@ -432,9 +432,34 @@
   }
 
   function handleScroll() {
-    if (container) {
-      scrollTop = container.scrollTop;
-    }
+    if (!container) return;
+    const st = container.scrollTop;
+    const verticalChanged = st !== scrollTop;
+    scrollTop = st;
+    // Auto-pan horizontally only when the vertical position actually moved, so the
+    // user can still scroll horizontally on their own between vertical scrolls.
+    if (horizontalScroll && verticalChanged) autoPanHorizontal();
+  }
+
+  // In horizontal-scroll mode, keep the message start (the graph's right edge) of the
+  // commit at the vertical centre of the viewport aligned to ~1/4 from the left, so
+  // the graph sits in the left quarter and the message gets the right three-quarters.
+  // Margins are interpolated between adjacent rows so the pan follows smoothly.
+  function autoPanHorizontal() {
+    if (!container) return;
+    const centerY = scrollTop + viewportHeight / 2;
+    const f = centerY / ROW_HEIGHT - 0.5; // fractional row index (row i centred at i+0.5)
+    const last = displayCommits.length - 1;
+    if (last < 0) return;
+    const i0 = Math.max(0, Math.min(last, Math.floor(f)));
+    const i1 = Math.min(last, i0 + 1);
+    const t = Math.max(0, Math.min(1, f - i0));
+    const m0 = displayLeftMargin[i0] ?? 0;
+    const m1 = displayLeftMargin[i1] ?? 0;
+    const messageStartX = (m0 + (m1 - m0) * t) * X_SCALE + 4;
+    const maxLeft = Math.max(0, contentWidth - viewportWidth);
+    const target = Math.max(0, Math.min(messageStartX - viewportWidth / 4, maxLeft));
+    if (Math.abs(container.scrollLeft - target) > 0.5) container.scrollLeft = target;
   }
 
   function handleResize() {
