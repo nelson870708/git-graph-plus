@@ -1608,6 +1608,17 @@
     isolation: isolate;
   }
 
+  /* In horizontal-scroll mode the load-more row would otherwise sit at the
+     content's left origin and slide out of view as the user scrolls right to
+     follow a wide graph. Pin it to the left of the viewport (width stays the
+     visible width, so the centered button is always reachable without
+     horizontally scrolling back). */
+  .commit-graph.h-scroll .load-more-row {
+    position: sticky;
+    left: 0;
+    width: 100%;
+  }
+
   /* Pinned meta columns. A direct child of .scroll-content with a z-index above the
      graph SVG (3), so it reliably covers the lanes scrolling underneath — no reliance
      on descendants escaping the rows' stacking context. */
