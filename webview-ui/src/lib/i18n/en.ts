@@ -310,9 +310,13 @@ export const en: Record<string, string> = {
 
   // Checkout and Fast-Forward modal
   'fastForward.title': 'Checkout and Fast-Forward',
+  'fastForward.titleNoCheckout': 'Fast-Forward',
   'fastForward.desc': 'Checkout local branch and fast-forward it to remote branch.',
+  'fastForward.descNoCheckout': 'Update the local branch to match the remote without checking it out.',
   'fastForward.switchTo': 'Switch to:',
+  'fastForward.update': 'Update:',
   'fastForward.fastForwardTo': 'Fast-Forward to:',
+  'fastForward.noCheckout': 'Fast-forward without checking out',
 
   // Checkout branch modal (pull after checkout)
   'checkoutBranch.title': 'Checkout Branch',

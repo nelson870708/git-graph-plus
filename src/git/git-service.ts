@@ -846,6 +846,17 @@ export class GitService {
     await this.exec(['merge', '--abort']);
   }
 
+  /** Fast-forward a local branch to a source ref WITHOUT checking it out, via a
+   *  local refspec fetch (`git fetch . <src>:<local>`). Because no `+` is used,
+   *  git rejects the update when it is not a fast-forward, so diverged local
+   *  commits are never clobbered. Works offline against an already-fetched
+   *  remote-tracking ref and leaves the working tree / current branch untouched. */
+  async fastForwardRef(localBranch: string, sourceRef: string): Promise<void> {
+    this.assertSafeRef(localBranch, 'fast-forward');
+    this.assertSafeRef(sourceRef, 'fast-forward');
+    await this.exec(['fetch', '.', `${sourceRef}:${localBranch}`]);
+  }
+
   async diffCommits(ref1: string, ref2: string): Promise<DiffData[]> {
     this.assertSafeRef(ref1, 'diff');
     this.assertSafeRef(ref2, 'diff');

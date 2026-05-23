@@ -310,9 +310,13 @@ export const ko: Record<string, string> = {
 
   // Checkout and Fast-Forward modal
   'fastForward.title': 'Checkout and Fast-Forward',
+  'fastForward.titleNoCheckout': 'Fast-Forward',
   'fastForward.desc': '로컬 브랜치로 전환하고 리모트 브랜치로 fast-forward 합니다.',
+  'fastForward.descNoCheckout': '체크아웃하지 않고 로컬 브랜치를 리모트에 맞춰 fast-forward 합니다.',
   'fastForward.switchTo': 'Switch to:',
+  'fastForward.update': 'Update:',
   'fastForward.fastForwardTo': 'Fast-Forward to:',
+  'fastForward.noCheckout': '체크아웃 없이 fast-forward',
 
   // Checkout branch modal (pull after checkout)
   'checkoutBranch.title': '브랜치 Checkout',

@@ -310,9 +310,13 @@ export const zh: Record<string, string> = {
 
   // Checkout and Fast-Forward modal
   'fastForward.title': '检出并快进',
+  'fastForward.titleNoCheckout': '快进',
   'fastForward.desc': '检出本地分支并将其快进到远程分支。',
+  'fastForward.descNoCheckout': '不检出本地分支，直接将其快进到与远程一致。',
   'fastForward.switchTo': '切换到：',
+  'fastForward.update': '更新：',
   'fastForward.fastForwardTo': '快进到：',
+  'fastForward.noCheckout': '不检出直接快进',
 
   // Checkout branch modal (pull after checkout)
   'checkoutBranch.title': '检出分支',

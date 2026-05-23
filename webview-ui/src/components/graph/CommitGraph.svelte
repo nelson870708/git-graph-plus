@@ -1373,14 +1373,17 @@
   <FastForwardModal
     localBranch={fastForwardLocalBranch}
     remote={fastForwardRemote}
+    isCurrentBranch={fastForwardLocalBranch === branchStore.currentBranch?.name}
     onClose={() => { showFastForwardModal = false; }}
-    onConfirm={() => {
+    onConfirm={(noCheckout) => {
       showFastForwardModal = false;
       const local = fastForwardLocalBranch;
       const remote = fastForwardRemote;
-      const dp = { ...pendingCheckoutDirtyPayload };
+      // A no-checkout fast-forward leaves the working tree alone, so the dirty
+      // (stash/clean) payload is irrelevant there.
+      const dp = noCheckout ? {} : { ...pendingCheckoutDirtyPayload };
       pendingCheckoutDirtyPayload = {};
-      vscode.postMessage({ type: 'fastForward', payload: { local, remote, ...dp } });
+      vscode.postMessage({ type: 'fastForward', payload: { local, remote, noCheckout, ...dp } });
     }}
   />
 {/if}

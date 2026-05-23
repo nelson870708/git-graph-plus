@@ -473,24 +473,31 @@ export class MainPanel {
           break;
         }
         case 'fastForward': {
-          // Fast-forward is a sync (like pull, and git's `merge --autostash`):
-          // stash so the working tree is clean for the ff-merge, then pop to
-          // restore the changes — unlike a plain checkout, which sets them aside.
-          if (message.payload.stash) {
-            await this.gitService.stashSave('Auto-stash before fast-forward', message.payload.stashUntracked);
-          }
-          if (message.payload.clean) {
-            await this.gitService.clean();
-          }
-          try {
-            await this.gitService.checkout(message.payload.local, {});
-            await this.gitService.merge(message.payload.remote, { ffOnly: true });
-          } finally {
+          if (message.payload.noCheckout) {
+            // Update the (non-current) branch in place without switching to it.
+            // Pure ref fast-forward — the working tree and current branch are
+            // untouched, so no stash/clean dance is needed.
+            await this.gitService.fastForwardRef(message.payload.local, message.payload.remote);
+          } else {
+            // Fast-forward is a sync (like pull, and git's `merge --autostash`):
+            // stash so the working tree is clean for the ff-merge, then pop to
+            // restore the changes — unlike a plain checkout, which sets them aside.
             if (message.payload.stash) {
-              try {
-                await this.gitService.stashPop(0);
-              } catch {
-                this.post({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterFastForwardFailed') } });
+              await this.gitService.stashSave('Auto-stash before fast-forward', message.payload.stashUntracked);
+            }
+            if (message.payload.clean) {
+              await this.gitService.clean();
+            }
+            try {
+              await this.gitService.checkout(message.payload.local, {});
+              await this.gitService.merge(message.payload.remote, { ffOnly: true });
+            } finally {
+              if (message.payload.stash) {
+                try {
+                  await this.gitService.stashPop(0);
+                } catch {
+                  this.post({ type: 'error', payload: { message: vscode.l10n.t('stashPopAfterFastForwardFailed') } });
+                }
               }
             }
           }
