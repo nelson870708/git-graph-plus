@@ -308,13 +308,15 @@
 
   let container: HTMLDivElement | undefined = $state();
   let scrollTop = $state(0);
+  // Hovered row hash, so the row and its pinned meta overlay highlight as one row.
+  let hoveredHash = $state<string | null>(null);
   let viewportHeight = $state(600);
   let viewportWidth = $state(800);
 
   // Right-side columns (author + sha + date) and the minimum width we always
   // reserve for the commit message. These mirror the fixed column widths in the
   // CSS below.
-  const RIGHT_COLS_WIDTH = 120 + 75 + 160;
+  const RIGHT_COLS_WIDTH = 120 + 75 + 150;
   const MIN_MESSAGE_WIDTH = 120;
 
   // In huge repos (e.g. nixpkgs) hundreds of concurrent branches make the graph
@@ -342,14 +344,33 @@
 
   let totalHeight = $derived(displayCommits.length * ROW_HEIGHT);
 
-  let graphWidth = $derived.by(() => {
-    if (displayLeftMargin.length > 0) {
-      let maxMargin = 0;
-      for (const m of displayLeftMargin) if (m > maxMargin) maxMargin = m;
-      return Math.min(Math.ceil(maxMargin * X_SCALE) + 4, maxGraphWidth);
-    }
-    return 30;
+  // Full lane span, ignoring the clip cap. Used to decide whether the graph has
+  // grown wide enough to switch from clipping to horizontal scrolling.
+  let naturalGraphWidth = $derived.by(() => {
+    if (displayLeftMargin.length === 0) return 30;
+    let maxMargin = 0;
+    for (const m of displayLeftMargin) if (m > maxMargin) maxMargin = m;
+    return Math.ceil(maxMargin * X_SCALE) + 4;
   });
+
+  // Switch to horizontal scrolling only once the graph is wide enough that the
+  // message would otherwise be squeezed below its minimum (i.e. exactly when we'd
+  // have started clipping lanes). Below that the graph fits with a usable message
+  // column, so normal mode is kept — avoids a premature scrollbar and empty space
+  // on the right when the content is narrower than the viewport.
+  let horizontalScroll = $derived(naturalGraphWidth > maxGraphWidth);
+
+  // The graph always renders at its full natural width. In normal mode that fits
+  // (we only switch to scroll mode once it would exceed maxGraphWidth), so the graph
+  // looks identical either way — only the message column and scrolling differ.
+  let graphWidth = $derived(naturalGraphWidth);
+
+  // Explicit row/header width in scroll mode so the container shows a horizontal
+  // scrollbar. Never narrower than the viewport, so rows always fill the width and
+  // the pinned meta stays flush right. 0 means "let the normal flex/100% layout decide".
+  let contentWidth = $derived(
+    horizontalScroll ? Math.max(graphWidth + MIN_MESSAGE_WIDTH + RIGHT_COLS_WIDTH, viewportWidth) : 0
+  );
 
   let startIndex = $derived(Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_ROWS));
   let endIndex = $derived(
@@ -420,6 +441,67 @@
     if (container) {
       viewportHeight = container.clientHeight;
       viewportWidth = container.clientWidth;
+    }
+  }
+
+  // Row click / double-click behaviour, shared by the commit rows and the pinned
+  // meta overlay so clicking the author/date area behaves the same as the row.
+  function handleRowClick(commit: typeof displayCommits[0]) {
+    if (bisectBadCommit && bisectBadCommit !== commit.hash) {
+      const bad = bisectBadCommit;
+      bisectBadCommit = null;
+      bisectStartBad = bad;
+      bisectStartGood = commit.hash;
+      vscode.postMessage({ type: 'bisectStart', payload: { bad, good: commit.hash } });
+      return;
+    }
+    if (compareBase && compareBase !== commit.hash) {
+      uiStore.comparing = true;
+      uiStore.selectedCommitHash = null;
+      uiStore.compareRef1 = compareBase;
+      uiStore.compareRef2 = commit.hash;
+      uiStore.showBottomPanel = true;
+      vscode.postMessage({ type: 'compareCommits', payload: { ref1: compareBase, ref2: commit.hash } });
+      compareBase = null;
+      return;
+    }
+    // The uncommitted-changes row opens VS Code's Source Control view
+    // (where the user stages/commits) instead of the in-graph detail panel.
+    if (commit.hash === 'UNCOMMITTED') {
+      if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+      uiStore.selectedCommitHash = null;
+      vscode.postMessage({ type: 'openScmView' });
+      return;
+    }
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+    clickTimer = setTimeout(() => { clickTimer = null; selectCommit(commit.hash); }, 200);
+  }
+
+  // Derive the hovered row from the pointer's Y position over the whole scroll
+  // surface. One coordinate-based handler covers the rows and the pinned meta
+  // overlay alike, so they always resolve to the same row with no cross-element
+  // enter/leave flicker.
+  function handleRowHover(e: PointerEvent) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const idx = Math.floor((e.clientY - rect.top) / ROW_HEIGHT);
+    hoveredHash = idx >= 0 && idx < displayCommits.length ? displayCommits[idx].hash : null;
+  }
+
+  function handleRowDblClick(commit: typeof displayCommits[0]) {
+    if (commit.hash === 'UNCOMMITTED') return;
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+    const localRefs = commit.refs.filter(r => r.type === 'head' || r.type === 'branch');
+    if (localRefs.length === 1) {
+      doCheckout(localRefs[0].name, false, {}, true);
+    } else if (localRefs.length > 1) {
+      openCheckoutCommitModal(commit.hash);
+    } else {
+      const remoteRef = commit.refs.find(r => r.type === 'remote-branch' && r.name !== 'HEAD');
+      if (remoteRef) {
+        doCheckoutRemote(`${remoteRef.remote}/${remoteRef.name}`, remoteRef.name);
+      } else {
+        openCheckoutCommitModal(commit.hash);
+      }
     }
   }
 
@@ -804,6 +886,7 @@
       viewportWidth = container.clientWidth;
     }
   });
+
 </script>
 
 <svelte:window onresize={handleResize} onkeydown={(e) => {
@@ -814,7 +897,7 @@
   }
 }} />
 
-<div class="commit-graph" bind:this={container} onscroll={handleScroll}>
+<div class="commit-graph" class:h-scroll={horizontalScroll} bind:this={container} onscroll={handleScroll}>
   {#if commitStore.loading && !isSearchActive}
     <div class="loading"><span class="spinner"></span> {t('graph.loading')}</div>
   {:else if commitStore.notGitRepo}
@@ -824,16 +907,37 @@
   {:else}
     {#if false}{/if}
 
+    <!-- Author / hash / date cells, shared by the in-row meta (normal mode) and the
+         pinned overlay (horizontal-scroll mode). -->
+    {#snippet metaCells(commit: typeof displayCommits[0])}
+      <div class="col-author" use:tooltip={commit.author.name}>
+        {#if commit.hash !== 'UNCOMMITTED'}
+          <img class="avatar-sm" src={getGravatarUrl(commit.author.email, 20)} alt="" loading="lazy" />
+          <span class="author-name truncate">{commit.author.name}</span>
+        {/if}
+      </div>
+      <div class="col-hash" use:tooltip={commit.hash !== 'UNCOMMITTED' ? commit.hash : ''}>{commit.hash !== 'UNCOMMITTED' ? commit.abbreviatedHash : ''}</div>
+      <div class="col-date" use:tooltip={commit.hash !== 'UNCOMMITTED' ? new Date(commit.author.date).toLocaleString() : ''}>{commit.hash !== 'UNCOMMITTED' ? formatDate(commit.author.date) : ''}</div>
+    {/snippet}
+
     <!-- Column headers -->
-    <div class="graph-header">
+    <div class="graph-header" style={contentWidth ? `width: ${contentWidth}px;` : ''}>
       <div class="col-message">{t('graph.description')}</div>
-      <div class="col-author">{t('graph.author')}</div>
-      <div class="col-hash">{t('graph.sha')}</div>
-      <div class="col-date">{t('graph.date')}</div>
+      <div class="col-meta">
+        <div class="col-author">{t('graph.author')}</div>
+        <div class="col-hash">{t('graph.sha')}</div>
+        <div class="col-date">{t('graph.date')}</div>
+      </div>
     </div>
 
     <!-- Virtual scroll container -->
-    <div class="scroll-content" style="height: {totalHeight}px; position: relative;">
+    <div
+      class="scroll-content"
+      style="height: {totalHeight}px; position: relative;{contentWidth ? ` width: ${contentWidth}px;` : ''}"
+      role="presentation"
+      onpointermove={handleRowHover}
+      onpointerleave={() => { hoveredHash = null; }}
+    >
       <!-- SVG for graph - SourceGit-style Path + Link + Dot rendering -->
       <svg
         class="graph-lines"
@@ -892,6 +996,7 @@
       <div
         class="visible-rows"
         style="position: absolute; top: {startIndex * ROW_HEIGHT}px; width: 100%;"
+        role="rowgroup"
       >
         {#each visibleCommits as { commit, index } (commit.hash)}
           {@const dot = displayDots[index]}
@@ -899,6 +1004,7 @@
           {@const isRemoteTip = dot?.remoteTip ?? false}
           <div
             class="commit-row"
+            class:hovered={hoveredHash === commit.hash}
             class:selected={uiStore.selectedCommitHash === commit.hash}
             class:highlighted={contextMenuHash === commit.hash}
             class:search-match={isSearchActive && searchMatchedHashes?.has(commit.hash)}
@@ -914,53 +1020,8 @@
             class:bisect-start-good={bisectActive && bisectStartGood === commit.hash}
             class:bisect-culprit={bisectCulpritHash !== null && commit.hash.startsWith(bisectCulpritHash)}
             style="height: {ROW_HEIGHT}px;"
-            onclick={() => {
-              if (bisectBadCommit && bisectBadCommit !== commit.hash) {
-                const bad = bisectBadCommit;
-                bisectBadCommit = null;
-                bisectStartBad = bad;
-                bisectStartGood = commit.hash;
-                vscode.postMessage({ type: 'bisectStart', payload: { bad, good: commit.hash } });
-                return;
-              }
-              if (compareBase && compareBase !== commit.hash) {
-                uiStore.comparing = true;
-                uiStore.selectedCommitHash = null;
-                uiStore.compareRef1 = compareBase;
-                uiStore.compareRef2 = commit.hash;
-                uiStore.showBottomPanel = true;
-                vscode.postMessage({ type: 'compareCommits', payload: { ref1: compareBase, ref2: commit.hash } });
-                compareBase = null;
-                return;
-              }
-              // The uncommitted-changes row opens VS Code's Source Control view
-              // (where the user stages/commits) instead of the in-graph detail panel.
-              if (commit.hash === 'UNCOMMITTED') {
-                if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-                uiStore.selectedCommitHash = null;
-                vscode.postMessage({ type: 'openScmView' });
-                return;
-              }
-              if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
-              clickTimer = setTimeout(() => { clickTimer = null; selectCommit(commit.hash); }, 200);
-            }}
-            ondblclick={() => {
-              if (commit.hash === 'UNCOMMITTED') return;
-              if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-              const localRefs = commit.refs.filter(r => r.type === 'head' || r.type === 'branch');
-              if (localRefs.length === 1) {
-                doCheckout(localRefs[0].name, false, {}, true);
-              } else if (localRefs.length > 1) {
-                openCheckoutCommitModal(commit.hash);
-              } else {
-                const remoteRef = commit.refs.find(r => r.type === 'remote-branch' && r.name !== 'HEAD');
-                if (remoteRef) {
-                  doCheckoutRemote(`${remoteRef.remote}/${remoteRef.name}`, remoteRef.name);
-                } else {
-                  openCheckoutCommitModal(commit.hash);
-                }
-              }
-            }}
+            onclick={() => handleRowClick(commit)}
+            ondblclick={() => handleRowDblClick(commit)}
             oncontextmenu={(e) => { if (commit.hash === 'UNCOMMITTED') onUncommittedContextMenu(e); else onCommitContextMenu(e, commit); }}
             use:tooltip={commit.hash === 'UNCOMMITTED' ? t('graph.clickToOpenScm') : ''}
             role="row"
@@ -975,7 +1036,7 @@
               }
             }}
           >
-            <div class="col-message" style="padding-left: {Math.min((displayLeftMargin[index] ?? graphWidth) * X_SCALE + 4, maxGraphWidth)}px;">
+            <div class="col-message" style="padding-left: {(displayLeftMargin[index] ?? 0) * X_SCALE + 4}px;">
               {#if currentBranchLocalOnly.has(commit.hash)}
                 <span class="local-dot" use:tooltip={t('graph.notPushed')}></span>
               {:else if currentBranchRemoteAhead.has(commit.hash)}
@@ -1104,17 +1165,52 @@
                   <span class="commit-subject truncate" use:tooltip={commit.subject}>{commit.subject}</span>
                 {/if}
             </div>
-              <div class="col-author" use:tooltip={commit.author.name}>
-                {#if commit.hash !== 'UNCOMMITTED'}
-                  <img class="avatar-sm" src={getGravatarUrl(commit.author.email, 20)} alt="" loading="lazy" />
-                  <span class="author-name truncate">{commit.author.name}</span>
-                {/if}
-              </div>
-              <div class="col-hash" use:tooltip={commit.hash !== 'UNCOMMITTED' ? commit.hash : ''}>{commit.hash !== 'UNCOMMITTED' ? commit.abbreviatedHash : ''}</div>
-              <div class="col-date" use:tooltip={commit.hash !== 'UNCOMMITTED' ? new Date(commit.author.date).toLocaleString() : ''}>{commit.hash !== 'UNCOMMITTED' ? formatDate(commit.author.date) : ''}</div>
+              {#if horizontalScroll}
+                <!-- Space is reserved here; the visible meta is the pinned overlay below. -->
+                <div class="col-meta-spacer" style="width: {RIGHT_COLS_WIDTH}px;"></div>
+              {:else}
+                <div class="col-meta">{@render metaCells(commit)}</div>
+              {/if}
           </div>
         {/each}
       </div>
+
+      <!-- Pinned meta columns (horizontal-scroll mode). A direct child of
+           .scroll-content, so its z-index reliably sits above the graph SVG without
+           depending on descendants escaping the rows' stacking context. -->
+      {#if horizontalScroll}
+        <div
+          class="meta-overlay"
+          style="height: {totalHeight}px; width: {RIGHT_COLS_WIDTH}px;"
+        >
+          {#each visibleCommits as { commit, index } (commit.hash)}
+            <div
+              class="meta-row"
+              class:selected={uiStore.selectedCommitHash === commit.hash}
+              class:highlighted={contextMenuHash === commit.hash}
+              class:search-dim={isSearchActive && !searchMatchedHashes?.has(commit.hash)}
+              class:search-current={searchNavigateHash === commit.hash}
+              class:other-branch={!isSearchActive && !currentBranchCommits.has(commit.hash) && commit.hash !== 'UNCOMMITTED'}
+              class:compare-base={compareBase === commit.hash}
+              class:compare-active={uiStore.comparing && (uiStore.compareRef1 === commit.hash || uiStore.compareRef2 === commit.hash)}
+              class:bisect-bad={bisectBadCommit === commit.hash}
+              class:bisect-start-bad={bisectActive && bisectStartBad === commit.hash}
+              class:bisect-start-good={bisectActive && bisectStartGood === commit.hash}
+              class:bisect-culprit={bisectCulpritHash !== null && commit.hash.startsWith(bisectCulpritHash)}
+              class:hovered={hoveredHash === commit.hash}
+              style="top: {index * ROW_HEIGHT}px; height: {ROW_HEIGHT}px;"
+              role="row"
+              tabindex={-1}
+              onclick={() => handleRowClick(commit)}
+              ondblclick={() => handleRowDblClick(commit)}
+              oncontextmenu={(e) => { if (commit.hash === 'UNCOMMITTED') onUncommittedContextMenu(e); else onCommitContextMenu(e, commit); }}
+              onkeydown={(e) => { if (e.key === 'Enter') handleRowClick(commit); }}
+            >
+              {@render metaCells(commit)}
+            </div>
+          {/each}
+        </div>
+      {/if}
 
     </div>
 
@@ -1367,7 +1463,9 @@
     user-select: none;
   }
 
-  .commit-row:hover {
+  /* Driven by hoveredHash (not :hover) so the row and the pinned meta overlay
+     highlight in the same reactive tick instead of a frame apart. */
+  .commit-row.hovered {
     background: var(--bg-hover);
   }
 
@@ -1394,16 +1492,16 @@
     color: var(--text-selected);
   }
 
+  /* Right-click (context menu) highlight. In normal mode this full outline encloses
+     the whole row; in scroll mode the pinned overlay draws the right side (see
+     .meta-row.highlighted) while this covers the message side. */
   .commit-row.highlighted:not(.selected) {
     background: var(--bg-hover);
     outline: 1px solid var(--vscode-focusBorder, #007fd4);
     outline-offset: -1px;
   }
-
-  .commit-row:focus-visible {
-    outline: 1px solid var(--vscode-focusBorder, #007fd4);
-    outline-offset: -1px;
-  }
+  /* No focus ring on click/keyboard focus (selection is shown by the row background). */
+  .commit-row:focus-visible { outline: none; }
 
   .commit-row:not(.other-branch) .commit-subject {
     font-weight: normal;
@@ -1439,6 +1537,96 @@
     padding: 0 10px;
     overflow: hidden;
   }
+
+  /* In normal mode the meta wrapper is transparent to layout, so author/hash/date
+     behave exactly as direct flex children of the row. */
+  .col-meta {
+    display: contents;
+  }
+
+  /* The graph header's meta columns stay pinned to the right while the header
+     scrolls horizontally. (The body rows use the overlay below instead.) */
+  .commit-graph.h-scroll .col-meta {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    position: sticky;
+    right: 0;
+    z-index: 5;
+    background-color: var(--bg-secondary);
+    /* Cancel the `.graph-header > div` padding so the header labels line up exactly
+       with the overlay content below (whose cells carry their own padding). */
+    padding: 0;
+  }
+
+  /* Reserve the meta width inside each scrolling row. The visible meta is painted
+     by the pinned overlay, which is layered separately above the graph. */
+  .col-meta-spacer {
+    flex-shrink: 0;
+  }
+
+  /* Isolate so the graph SVG and the pinned meta overlay resolve their z-index in
+     one local context, regardless of any ancestor stacking contexts. */
+  .commit-graph.h-scroll .scroll-content {
+    isolation: isolate;
+  }
+
+  /* Pinned meta columns. A direct child of .scroll-content with a z-index above the
+     graph SVG (3), so it reliably covers the lanes scrolling underneath — no reliance
+     on descendants escaping the rows' stacking context. */
+  .meta-overlay {
+    /* Native sticky pins it to the right edge with zero lag during horizontal
+       scroll. margin-left:auto right-aligns it so its static position is the
+       right of the content (the frozen-column pattern). */
+    position: sticky;
+    right: 0;
+    margin-left: auto;
+    z-index: 6;
+  }
+
+  .meta-row {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-primary);
+    cursor: pointer;
+    user-select: none;
+    /* Match the commit row's background transition so the message and the pinned
+       author/hash/date highlight in lock-step instead of one snapping early. */
+    transition: background 0.08s;
+  }
+
+  /* The overlay's share of the right-click highlight border: top, bottom and right
+     edges only, so it joins seamlessly with the commit row's outline (which covers
+     the message side and left edge) into one box around the whole row — no seam. */
+  .meta-row.highlighted:not(.selected) {
+    background-color: var(--bg-hover);
+    box-shadow:
+      inset 0 1px 0 var(--vscode-focusBorder, #007fd4),
+      inset 0 -1px 0 var(--vscode-focusBorder, #007fd4),
+      inset -1px 0 0 var(--vscode-focusBorder, #007fd4);
+  }
+  /* No focus ring on click/keyboard focus. */
+  .meta-row:focus-visible { outline: none; }
+
+  .meta-row.hovered { background-color: var(--bg-hover); }
+  .meta-row.selected { background-color: var(--bg-selected); }
+  .meta-row.selected .col-author,
+  .meta-row.selected .col-hash,
+  .meta-row.selected .col-date { color: var(--text-selected); opacity: 0.8; }
+  .meta-row.other-branch .col-author,
+  .meta-row.other-branch .col-hash,
+  .meta-row.other-branch .col-date { opacity: 0.6; }
+  .meta-row.search-dim { opacity: 0.3; }
+  .meta-row.search-current { background-color: color-mix(in srgb, var(--vscode-focusBorder, #007fd4) 20%, var(--bg-primary)); }
+  .meta-row.compare-base,
+  .meta-row.compare-active { background-color: color-mix(in srgb, #63b0f4 12%, var(--bg-primary)); }
+  .meta-row.bisect-bad,
+  .meta-row.bisect-start-bad { background-color: color-mix(in srgb, #f44336 12%, var(--bg-primary)); }
+  .meta-row.bisect-start-good { background-color: color-mix(in srgb, #4caf50 12%, var(--bg-primary)); }
+  .meta-row.bisect-culprit { background-color: color-mix(in srgb, #ff9800 15%, var(--bg-primary)); }
 
   .local-dot {
     width: 5px;
@@ -1492,7 +1680,7 @@
   }
 
   .col-date {
-    width: 160px;
+    width: 150px;
     flex-shrink: 0;
     padding: 0 10px;
     color: var(--text-secondary);
