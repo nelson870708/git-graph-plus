@@ -282,6 +282,11 @@ describe('GitService integration — state mutations', () => {
       expect(stashes[0].message).toContain('renamed message');
     });
 
+    it('stashRename rejects a negative or non-integer index before touching git', async () => {
+      await expect(svc.stashRename(-1, 'x')).rejects.toThrow('Invalid stash index');
+      await expect(svc.stashRename(1.5, 'x')).rejects.toThrow('Invalid stash index');
+    });
+
     it('stashSave with keepIndex creates a stash but leaves staged changes in place', async () => {
       commit(repo.path, 'init', { 'a.txt': 'base\n' });
       writeFileSync(join(repo.path, 'a.txt'), 'staged change\n');

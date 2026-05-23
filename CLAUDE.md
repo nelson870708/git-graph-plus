@@ -29,9 +29,11 @@ npm run lint               # runs tsc --noEmit on the extension
 cd webview-ui && npm run check   # runs svelte-check
 
 # Tests
-npm test                   # vitest run (all tests)
+npm test                   # vitest run (all: backend + webview projects)
 npm run test:watch         # vitest in watch mode
-npx vitest run src/git/__tests__/specific-file.test.ts  # single test file
+npx vitest run --project backend   # only extension-host tests
+npx vitest run --project webview   # only Svelte/webview tests
+npx vitest run src/git/__tests__/git-service.test.ts  # single test file
 
 # Package for marketplace
 npm run package            # vsce package → .vsix file
@@ -75,6 +77,6 @@ All communication is via `postMessage` / `onDidReceiveMessage`. Message types ar
 ## Key Conventions
 
 - Extension is bundled with **esbuild** (CJS, Node target). Webview is bundled with **Vite** (ESM, browser target).
-- Tests use **Vitest** and live in `src/git/__tests__/` (unit + `integration/`) and `src/services/__tests__/`. Coverage is uploaded to Codecov; see `vitest.config.mts` for excluded paths.
-- The extension activates when a `.git` folder is detected (`workspaceContains:.git`).
+- Tests use **Vitest**, split into two projects in `vitest.config.mts`: `backend` (extension-host code, `src/**/*.test.ts`, node env, runs against the real `git` CLI; integration tests in `src/git/__tests__/integration/` spawn real git/git-flow/git-lfs and use a 30s timeout) and `webview` (Svelte components/stores, `webview-ui/src/**/*.test.ts`, happy-dom env). `npm test` runs both. Coverage is uploaded to Codecov; vscode-bound modules (`extension.ts`, `panels/`, canvas/shiki webview code) are excluded from the % — see the comments in `vitest.config.mts`.
+- The extension activates on `onStartupFinished`; on activation it discovers repos in the workspace and is a no-op when none exist.
 - `vscode` is an external dependency (not bundled) — provided by the VS Code runtime.

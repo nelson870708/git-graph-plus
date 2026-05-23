@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { GitService } from '../../git-service';
 import { TempRepo, commit, createTempRepo, currentBranch, head, runGit, seedBranches } from './helpers';
@@ -347,6 +347,82 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
     });
   });
 
+  describe('continueOperation — dispatch by operation type', () => {
+    it('finalizes a cherry-pick after the conflict is resolved', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'feature']);
+      const target = commit(repo.path, 'feature edit', { 'a.txt': 'feature\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main edit', { 'a.txt': 'main\n' });
+
+      await expect(svc.cherryPick(target)).rejects.toThrow();
+      expect((await svc.getOperationState()).type).toBe('cherry-pick');
+
+      const { writeFileSync } = await import('fs');
+      writeFileSync(join(repo.path, 'a.txt'), 'resolved\n');
+      await svc.continueOperation();
+
+      expect((await svc.getOperationState()).type).toBeNull();
+      expect(readFileSync(join(repo.path, 'a.txt'), 'utf-8')).toBe('resolved\n');
+    });
+
+    it('finalizes a revert after the conflict is resolved', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'one\n' });
+      const target = commit(repo.path, 'change', { 'a.txt': 'two\n' });
+      commit(repo.path, 'further change', { 'a.txt': 'three\n' });
+
+      await expect(svc.revert(target)).rejects.toThrow();
+      expect((await svc.getOperationState()).type).toBe('revert');
+
+      const { writeFileSync } = await import('fs');
+      writeFileSync(join(repo.path, 'a.txt'), 'reverted\n');
+      await svc.continueOperation();
+
+      expect((await svc.getOperationState()).type).toBeNull();
+      expect(readFileSync(join(repo.path, 'a.txt'), 'utf-8')).toBe('reverted\n');
+    });
+
+    it('resumes a rebase after the conflict is resolved (dispatches to rebase --continue)', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'topic']);
+      commit(repo.path, 'topic edit', { 'a.txt': 'topic\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main edit', { 'a.txt': 'main\n' });
+
+      runGit(repo.path, ['checkout', 'topic']);
+      await expect(svc.rebase('main')).rejects.toThrow();
+      expect((await svc.getOperationState()).type).toBe('rebase');
+
+      const { writeFileSync } = await import('fs');
+      writeFileSync(join(repo.path, 'a.txt'), 'resolved\n');
+      // Go through the generic dispatcher rather than continueRebase() directly.
+      await svc.continueOperation();
+
+      expect((await svc.getOperationState()).type).toBeNull();
+    });
+
+    it('commits a squashed merge left in the SQUASH_MSG state', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'feature']);
+      commit(repo.path, 'feature work', { 'f.txt': 'f\n' });
+      runGit(repo.path, ['checkout', 'main']);
+
+      // Raw `merge --squash` stages the changes and writes SQUASH_MSG without
+      // committing — exactly the state the squash branch of continueOperation handles.
+      runGit(repo.path, ['merge', '--squash', 'feature']);
+      expect((await svc.getOperationState()).type).toBe('squash');
+
+      await svc.continueOperation();
+
+      // The squash commit is finalized: SQUASH_MSG is consumed and f.txt landed
+      // as a single non-merge commit on main.
+      expect((await svc.getOperationState()).type).toBeNull();
+      expect(readFileSync(join(repo.path, 'f.txt'), 'utf-8')).toBe('f\n');
+      const parents = runGit(repo.path, ['log', '-1', '--format=%P']).trim().split(/\s+/).filter(Boolean);
+      expect(parents.length).toBe(1);
+    });
+  });
+
   describe('log() — stash insertion', () => {
     it('inserts stash entries into the commit list near their base commit', async () => {
       commit(repo.path, 'init', { 'a.txt': 'one\n' });
@@ -468,6 +544,52 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
         { action: 'pick', hash: 'not-a-hash', subject: 'x' },
       ])).rejects.toThrow('Invalid commit hash');
     });
+
+    it('pauses on an edit action and leaves a resumable rebase instead of throwing', async () => {
+      commit(repo.path, 'init');
+      const base = head(repo.path);
+      const c1 = commit(repo.path, 'commit A', { 'a.txt': 'A\n' });
+      const c2 = commit(repo.path, 'commit B', { 'b.txt': 'B\n' });
+
+      // `edit` makes git stop after applying c1, leaving .git/rebase-merge on
+      // disk. interactiveRebase must treat that as a successful pause (resolve),
+      // not a rejection, so the UI shows the continue/abort banner.
+      await expect(svc.interactiveRebase(base, [
+        { action: 'edit', hash: c1, subject: 'commit A' },
+        { action: 'pick', hash: c2, subject: 'commit B' },
+      ])).resolves.toBeUndefined();
+
+      expect((await svc.getOperationState()).type).toBe('rebase');
+
+      // The rebase can be finished from the paused state.
+      await svc.continueRebase();
+      expect((await svc.getOperationState()).type).toBeNull();
+      const subjects = runGit(repo.path, ['log', '--format=%s', `${base}..HEAD`])
+        .trim().split('\n').filter(Boolean);
+      expect(subjects).toEqual(['commit B', 'commit A']);
+    });
+
+    it('treats a mid-replay conflict as a pause (resolves, leaving an in-progress rebase)', async () => {
+      commit(repo.path, 'init', { 'a.txt': '1\n' });
+      const base = head(repo.path);
+      // Two commits touching the same line. Reordering them so the second is
+      // replayed on top of the first makes git stop with a conflict, leaving
+      // .git/rebase-merge on disk and a non-zero exit — the "paused" branch.
+      const c1 = commit(repo.path, 'set to 2', { 'a.txt': '2\n' });
+      const c2 = commit(repo.path, 'set to 3', { 'a.txt': '3\n' });
+
+      await expect(svc.interactiveRebase(base, [
+        { action: 'pick', hash: c2, subject: 'set to 3' },
+        { action: 'pick', hash: c1, subject: 'set to 2' },
+      ])).resolves.toBeUndefined();
+
+      expect((await svc.getOperationState()).type).toBe('rebase');
+      expect(await svc.getConflictFiles()).toContain('a.txt');
+
+      // Abort to leave the temp repo in a clean state.
+      await svc.abortOperation();
+      expect((await svc.getOperationState()).type).toBeNull();
+    });
   });
 
   describe('getRebaseCommits', () => {
@@ -556,6 +678,24 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       await svc.abortOperation();
       expect((await svc.getOperationState()).type).toBeNull();
       expect(head(repo.path)).toBe(topicTip);
+    });
+
+    it('resets a squashed merge left in the SQUASH_MSG state', async () => {
+      commit(repo.path, 'init', { 'a.txt': 'base\n' });
+      const mainTip = head(repo.path);
+      runGit(repo.path, ['checkout', '-b', 'feature']);
+      commit(repo.path, 'feature work', { 'f.txt': 'f\n' });
+      runGit(repo.path, ['checkout', 'main']);
+
+      // Stage a squash merge but do not commit it.
+      runGit(repo.path, ['merge', '--squash', 'feature']);
+      expect((await svc.getOperationState()).type).toBe('squash');
+
+      // abortOperation runs `reset --hard HEAD`, discarding the staged squash
+      // changes and leaving HEAD untouched.
+      await svc.abortOperation();
+      expect(head(repo.path)).toBe(mainTip);
+      expect(existsSync(join(repo.path, 'f.txt'))).toBe(false);
     });
   });
 });

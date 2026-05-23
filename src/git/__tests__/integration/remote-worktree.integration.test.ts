@@ -130,6 +130,18 @@ describe('GitService integration — remote operations (local bare)', () => {
       expect(remoteTags).toContain('v0.2');
     });
 
+    it('pushTag / deleteRemoteTag default to origin when no remote is given', async () => {
+      await svc.push('origin', 'main', { setUpstream: true });
+      runGit(workRepo.path, ['tag', 'v9.0']);
+
+      // Omitting the remote argument exercises the `remote || 'origin'` fallback.
+      await svc.pushTag('v9.0');
+      expect(runGit(bareRepo.path, ['rev-parse', 'refs/tags/v9.0']).trim()).toBe(head(workRepo.path));
+
+      await svc.deleteRemoteTag('v9.0');
+      expect(runGit(bareRepo.path, ['for-each-ref', 'refs/tags']).trim()).not.toContain('v9.0');
+    });
+
     it('pushTagToAllRemotes pushes the tag to every configured remote', async () => {
       const mirror = createTempRepo({ bare: true });
       try {
@@ -157,6 +169,18 @@ describe('GitService integration — remote operations (local bare)', () => {
       await svc.deleteRemoteBranch('feature', 'origin');
       const refs = runGit(bareRepo.path, ['for-each-ref', 'refs/heads']).trim();
       expect(refs).not.toContain('feature');
+    });
+
+    it('defaults to origin when no remote is given', async () => {
+      await svc.push('origin', 'main', { setUpstream: true });
+      runGit(workRepo.path, ['checkout', '-b', 'throwaway']);
+      commit(workRepo.path, 'throwaway commit', { 't.txt': 't\n' });
+      await svc.push('origin', 'throwaway', { setUpstream: true });
+
+      // No remote argument → falls back to origin.
+      await svc.deleteRemoteBranch('throwaway');
+      const refs = runGit(bareRepo.path, ['for-each-ref', 'refs/heads']).trim();
+      expect(refs).not.toContain('throwaway');
     });
   });
 
