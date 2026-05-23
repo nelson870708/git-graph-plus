@@ -19,7 +19,7 @@ import { RepoDiscoveryService } from './services/repo-discovery';
  * a single path or an array of candidates (VS Code uses the first that exists).
  * Returns undefined when nothing is configured or none of the candidates exist.
  */
-function resolveConfiguredGitPath(): string | undefined {
+export function resolveConfiguredGitPath(): string | undefined {
   const cfg = vscode.workspace.getConfiguration('git').get<string | string[] | null>('path');
   const candidates = Array.isArray(cfg) ? cfg : cfg ? [cfg] : [];
   for (const c of candidates) {
