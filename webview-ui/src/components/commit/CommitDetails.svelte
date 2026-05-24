@@ -7,7 +7,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { getGravatarUrl } from '../../lib/utils/gravatar';
-  import { detectLanguage, highlightLineSync, getHighlighter, escapeHtml } from '../../lib/utils/highlighter';
+  import { detectLanguage, highlightLineSync, getHighlighter, ensureLanguage, activeShikiTheme, escapeHtml } from '../../lib/utils/highlighter';
 
   import ImageDiff from '../common/ImageDiff.svelte';
   import ContextMenu from '../common/ContextMenu.svelte';
@@ -443,6 +443,15 @@
 
   const MAX_HIGHLIGHT_LINES = 5000;
 
+  // Tracks the VS Code color theme so highlighting re-runs (with the matching
+  // light/dark token colours) when the user switches themes mid-session.
+  let shikiTheme = $state<'dark-plus' | 'light-plus'>(activeShikiTheme());
+  onMount(() => {
+    const observer = new MutationObserver(() => { shikiTheme = activeShikiTheme(); });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  });
+
   $effect(() => {
     if (!selectedDiff || selectedDiff.isBinary) return;
     const lang = detectLanguage(selectedDiff.file);
@@ -456,35 +465,44 @@
       return;
     }
     const target = selectedDiff;
+    const theme = shikiTheme; // capture so a theme switch invalidates the pass
     // Yield to the event loop between chunks so a multi-thousand-line diff
     // doesn't freeze the panel. Each batch processes CHUNK_SIZE lines then
     // hands control back via a microtask.
     const CHUNK_SIZE = 250;
     let cancelled = false;
-    getHighlighter().then(async h => {
-      if (selectedDiff !== target) return;
-      const newMap = new Map<string, string>();
-      const flat: Array<{ key: string; content: string }> = [];
-      for (const hunk of target.hunks) {
-        for (let i = 0; i < hunk.lines.length; i++) {
-          flat.push({ key: `${hunk.oldStart}-${i}`, content: hunk.lines[i].content });
-        }
-      }
-      for (let i = 0; i < flat.length; i += CHUNK_SIZE) {
+    getHighlighter()
+      .then(async h => {
         if (cancelled || selectedDiff !== target) return;
-        const end = Math.min(i + CHUNK_SIZE, flat.length);
-        for (let j = i; j < end; j++) {
-          newMap.set(flat[j].key, highlightLineSync(h, flat[j].content, lang));
+        // Grammars load on demand; bail out to plain escaping if this language
+        // has no Shiki grammar (highlightLineSync would fall back anyway, but
+        // skipping the loop avoids a pointless full pass over the diff).
+        const ready = await ensureLanguage(h, lang);
+        if (cancelled || selectedDiff !== target) return;
+        if (!ready) { highlightedLines = new Map(); return; }
+        const newMap = new Map<string, string>();
+        const flat: Array<{ key: string; content: string }> = [];
+        for (const hunk of target.hunks) {
+          for (let i = 0; i < hunk.lines.length; i++) {
+            flat.push({ key: `${hunk.oldStart}-${i}`, content: hunk.lines[i].content });
+          }
         }
-        // Defer to next microtask so user interaction (scroll, switch file)
-        // can interrupt mid-highlight without paying for the whole pass.
-        if (end < flat.length) {
-          await new Promise<void>(resolve => queueMicrotask(resolve));
+        for (let i = 0; i < flat.length; i += CHUNK_SIZE) {
+          if (cancelled || selectedDiff !== target) return;
+          const end = Math.min(i + CHUNK_SIZE, flat.length);
+          for (let j = i; j < end; j++) {
+            newMap.set(flat[j].key, highlightLineSync(h, flat[j].content, lang, theme));
+          }
+          // Defer to next microtask so user interaction (scroll, switch file)
+          // can interrupt mid-highlight without paying for the whole pass.
+          if (end < flat.length) {
+            await new Promise<void>(resolve => queueMicrotask(resolve));
+          }
         }
-      }
-      if (cancelled || selectedDiff !== target) return;
-      highlightedLines = newMap;
-    }).catch(() => {});
+        if (cancelled || selectedDiff !== target) return;
+        highlightedLines = newMap;
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   });
 

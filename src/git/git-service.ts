@@ -434,6 +434,13 @@ export class GitService {
     // a duplicate row.
     if (commits.length > 0 && !options?.skip) {
       try {
+        // `-uall` is intentional: it lists every untracked file individually
+        // (instead of collapsing untracked directories like the default
+        // `-unormal`) so the "Uncommitted changes (N)" summary row and the
+        // staged/unstaged counts match what the detail panel shows file-for-file.
+        // .gitignore is still honored, so on a normal repo this stays cheap; the
+        // only pathological case is a large *non-ignored* untracked tree, which
+        // is rare and which we accept in exchange for accurate counts.
         const porcelain = await this.exec(['status', '--porcelain', '-uall']);
         const lines = porcelain.split('\n').filter(Boolean);
         if (lines.length > 0) {
@@ -802,8 +809,12 @@ export class GitService {
     const commits = commitList.slice(0, PROBE_LIMIT);
     const conflictFiles = new Set<string>();
 
-    for (const commit of commits) {
-      // Try per-commit check (git 2.40+): use C^ as merge base to isolate only this commit's diff
+    // Probe one commit's conflicts. Prefers the per-commit isolation form
+    // (C^ as merge base, git 2.40+) so each commit's own diff is checked in
+    // isolation; falls back to the cumulative merge-base..commit form on old
+    // git or when the isolation form errors (e.g. an orphan commit with no
+    // parent). Returns the conflicting files for this commit (empty if none).
+    const probeCommit = async (commit: string): Promise<string[]> => {
       if (this.mergeBaseSupported !== false) {
         const result = await this.mergeTreeCheck(onto, commit, `${commit}^`);
         if (result.kind === 'unknown-option') {
@@ -811,18 +822,34 @@ export class GitService {
           this.mergeBaseSupported = false;
         } else if (result.kind === 'ok') {
           this.mergeBaseSupported = true;
-          if (result.value.hasConflict) result.value.files.forEach(f => conflictFiles.add(f));
-          continue;
+          return result.value.hasConflict ? result.value.files : [];
         }
-        // 'error' (e.g. orphan commit has no parent): fall through to the
-        // cumulative fallback for this commit only.
+        // 'error': fall through to the cumulative fallback for this commit only.
       }
-      // Fallback: cumulative diff from merge base
       const result = await this.mergeTreeCheck(onto, commit);
-      if (result.kind === 'ok' && result.value.hasConflict) {
-        result.value.files.forEach(f => conflictFiles.add(f));
+      return result.kind === 'ok' && result.value.hasConflict ? result.value.files : [];
+    };
+
+    // Probe the first commit on its own so the git-2.40 capability flag
+    // (mergeBaseSupported) is settled before fanning out — otherwise an old
+    // git would waste a rejected --merge-base attempt on every parallel probe.
+    (await probeCommit(commits[0])).forEach(f => conflictFiles.add(f));
+
+    // Replay the rest with bounded concurrency. merge-tree is read-only
+    // (--write-tree only creates throwaway objects), so parallel probes are
+    // safe; the cap keeps us from spawning up to 19 git processes at once.
+    const CONCURRENCY = 4;
+    const rest = commits.slice(1);
+    let next = 0;
+    const worker = async () => {
+      while (next < rest.length) {
+        const commit = rest[next++];
+        (await probeCommit(commit)).forEach(f => conflictFiles.add(f));
       }
-    }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, rest.length) }, worker),
+    );
 
     return { hasConflict: conflictFiles.size > 0, files: [...conflictFiles], truncated };
   }

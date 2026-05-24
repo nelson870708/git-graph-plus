@@ -219,6 +219,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
 
     if (ctrl && e.key === 'r') {
       e.preventDefault();
+      commitStore.setLoading(true);
       vscode.postMessage({ type: 'getLog', payload: {
         limit: commitStore.currentLimit || undefined,
         branches: branchFilter.length > 0 ? [...branchFilter] : undefined,
@@ -257,6 +258,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
         return b.remote ? filter.includes(b.remote) : filter.includes('local');
       });
     }
+    commitStore.setLoading(true);
     vscode.postMessage({
       type: 'getLog',
       payload: {
@@ -269,6 +271,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
 
   function handleBranchFilterChange(branches: string[]) {
     branchFilter = branches;
+    commitStore.setLoading(true);
     vscode.postMessage({
       type: 'getLog',
       payload: {
@@ -310,6 +313,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
 
 <div class="app-container" class:resizing>
   <Toolbar onRefresh={() => {
+    commitStore.setLoading(true);
     vscode.postMessage({ type: 'getLog', payload: {
       limit: commitStore.currentLimit || undefined,
       branches: branchFilter.length > 0 ? [...branchFilter] : undefined,
