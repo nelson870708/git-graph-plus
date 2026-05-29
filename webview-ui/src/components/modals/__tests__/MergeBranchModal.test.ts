@@ -75,4 +75,22 @@ describe('MergeBranchModal', () => {
     expect(container.querySelector('.conflict-status.is-warning')).not.toBeNull();
     expect(container.querySelector('.spinner')).toBeNull();
   });
+
+  it('hovering the conflict warning lists the predicted conflict files', async () => {
+    const { container } = render(MergeBranchModal, {
+      props: { source: 'feature/x', target: 'main', onClose: vi.fn(), onMerge: vi.fn() },
+    });
+    const requestId = (globalThis.__postedMessages.find(m =>
+      (m.data as { type: string }).type === 'predictConflicts',
+    )!.data as { payload: { requestId: string } }).payload.requestId;
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: 'conflictPrediction', payload: { hasConflict: true, files: ['src/a.ts', 'src/b.ts'], requestId } },
+    }));
+    await tick();
+
+    await fireEvent.mouseEnter(container.querySelector('.conflict-files-trigger')!);
+    const items = container.querySelectorAll('.conflict-files-popover__item');
+    expect(Array.from(items).map(i => i.textContent)).toEqual(['src/a.ts', 'src/b.ts']);
+  });
 });

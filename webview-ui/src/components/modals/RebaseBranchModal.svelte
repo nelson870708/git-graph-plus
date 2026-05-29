@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
+  import ConflictFilesPopover from '../common/ConflictFilesPopover.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { tooltip } from '../../lib/actions/tooltip';
   import { getVsCodeApi } from '../../lib/vscode-api';
@@ -56,8 +57,10 @@
         <span class="spinner"></span>
         <span>{t('rebase.checkingConflicts')}</span>
       {:else if conflictPrediction.hasConflict}
-        <i class="codicon codicon-warning"></i>
-        <span>{@html t('rebase.conflictWarning', { count: String(conflictPrediction.files.length) })}</span>
+        <ConflictFilesPopover files={conflictPrediction.files} truncated={conflictPrediction.truncated}>
+          <i class="codicon codicon-warning"></i>
+          <span>{@html t('rebase.conflictWarning', { count: String(conflictPrediction.files.length) })}</span>
+        </ConflictFilesPopover>
         {#if conflictPrediction.truncated}<span class="conflict-truncated">({t('rebase.predictionTruncated')})</span>{/if}
       {:else}
         <i class="codicon codicon-check modal-status-check"></i>

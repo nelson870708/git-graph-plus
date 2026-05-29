@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import Modal from '../common/Modal.svelte';
   import ColorSelect from '../common/ColorSelect.svelte';
+  import ConflictFilesPopover from '../common/ConflictFilesPopover.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { tooltip } from '../../lib/actions/tooltip';
   import { getVsCodeApi } from '../../lib/vscode-api';
@@ -62,8 +63,10 @@
         <span class="spinner"></span>
         <span>{t('merge.checkingConflicts')}</span>
       {:else if conflictPrediction.hasConflict}
-        <i class="codicon codicon-warning"></i>
-        <span>{@html t('merge.conflictWarning', { count: String(conflictPrediction.files.length) })}</span>
+        <ConflictFilesPopover files={conflictPrediction.files}>
+          <i class="codicon codicon-warning"></i>
+          <span>{@html t('merge.conflictWarning', { count: String(conflictPrediction.files.length) })}</span>
+        </ConflictFilesPopover>
       {:else}
         <i class="codicon codicon-check modal-status-check"></i>
         <span>{t('merge.noConflict')}</span>

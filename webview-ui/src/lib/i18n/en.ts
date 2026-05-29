@@ -477,6 +477,7 @@ export const en: Record<string, string> = {
   'conflict.op.cherryPick': 'Cherry-Pick',
   'conflict.markResolved': 'Mark as resolved (git add)',
   'conflict.openFile': 'Open file',
+  'conflict.predictedFilesTitle': 'Conflicting files',
   'rebase.pause.message': 'Rebase paused - make your changes, then continue',
   'rebase.pause.continue': 'Continue',
   'rebase.pause.abort': 'Abort',
