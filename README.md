@@ -86,6 +86,7 @@ A modern, full-featured Git GUI for VS Code. Visualize your commit history, mana
 
 | Feature                | Description                                                     |
 | ---------------------- | --------------------------------------------------------------- |
+| **Conflict Prediction** | Merge and rebase modals preview which files would conflict, listed on hover before you run the operation |
 | **Auto Detection**     | Detects conflicts during merge, rebase, cherry-pick, and revert |
 | **Conflict Banner**    | Shows conflicting files with per-file status indicators         |
 | **Editor Integration** | Click conflict files to open in VS Code's 3-way merge editor    |

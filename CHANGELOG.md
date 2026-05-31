@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3 (2026-05-31)
+
+### New Features
+- **Conflict File Preview** - Merge and rebase modals now list the files predicted to conflict when you hover over the action, so you can spot trouble before running the operation.
+
+### Bug Fixes
+- **Git Error Messages** - Failed git operations now surface the remote-provided cause, explaining what actually went wrong.
+- **Hover Tooltips** - Tooltips no longer cover the context menu or the color-select dropdown while either is open.
+
 ## 0.4.2 (2026-05-24)
 
 ### New Features
