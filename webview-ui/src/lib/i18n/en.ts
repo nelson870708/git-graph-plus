@@ -389,6 +389,8 @@ export const en: Record<string, string> = {
   'rebaseBranch.desc': 'Rebase the current branch onto the selected branch. This will rewrite commit history.',
   'rebaseBranch.rebase': 'Rebase',
   'rebase.autostash': 'Stash and reapply local changes (tracked only)',
+  'rebase.pushAfter': 'Push the branch after a successful rebase',
+  'rebase.pushAfterHint': 'Uses --force-with-lease since rebase rewrites history',
 
   // Reset modal
   'reset.modalTitle': 'Reset Branch to Revision',

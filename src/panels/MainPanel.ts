@@ -644,11 +644,31 @@ export class MainPanel {
         }
         case 'rebase': {
           await this.gitService.rebase(message.payload.onto, { autostash: message.payload.autostash });
+          // Optional follow-up: push the rebased branch. Rebase rewrites history,
+          // so this force-pushes with --force-with-lease. A push failure here is
+          // non-fatal — the rebase already succeeded — so surface it separately.
+          let pushOutcome: 'pushed' | 'no-remote' | 'failed' | null = null;
+          if (message.payload.pushAfter) {
+            try {
+              const result = await this.gitService.pushCurrentBranch({ force: 'with-lease' });
+              pushOutcome = result.pushed ? 'pushed' : 'no-remote';
+            } catch (err) {
+              pushOutcome = 'failed';
+              this.post({ type: 'error', payload: { message: vscode.l10n.t('pushAfterRebaseFailed', err instanceof Error ? err.message : String(err)) } });
+            }
+          }
           this.post({
             type: 'operationComplete',
             payload: { operation: 'rebase', success: true },
           });
-          vscode.window.showInformationMessage(vscode.l10n.t('rebased', message.payload.onto.substring(0, 7)));
+          const onto = message.payload.onto.substring(0, 7);
+          if (pushOutcome === 'pushed') {
+            vscode.window.showInformationMessage(vscode.l10n.t('rebasedAndPushed', onto));
+          } else if (pushOutcome === 'no-remote') {
+            vscode.window.showInformationMessage(vscode.l10n.t('pushAfterRebaseNoRemote', onto));
+          } else {
+            vscode.window.showInformationMessage(vscode.l10n.t('rebased', onto));
+          }
           await this.refreshAll();
           break;
         }

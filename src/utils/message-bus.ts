@@ -18,7 +18,7 @@ export type WebviewMessage =
   | { type: 'merge'; payload: { branch: string; noFf?: boolean; ffOnly?: boolean; squash?: boolean } }
   | { type: 'fastForward'; payload: { local: string; remote: string; stash?: boolean; stashUntracked?: boolean; clean?: boolean; noCheckout?: boolean } }
   | { type: 'abortMerge' }
-  | { type: 'rebase'; payload: { onto: string; autostash?: boolean } }
+  | { type: 'rebase'; payload: { onto: string; autostash?: boolean; pushAfter?: boolean } }
   | { type: 'abortRebase' }
   | { type: 'continueRebase' }
   | { type: 'skipRebase' }

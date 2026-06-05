@@ -10,11 +10,12 @@
     branch: string;
     onto: string;
     onClose: () => void;
-    onRebase: (options: { autostash: boolean }) => void;
+    onRebase: (options: { autostash: boolean; pushAfter: boolean }) => void;
   }
 
   let { branch, onto, onClose, onRebase }: Props = $props();
   let autostash = $state(false);
+  let pushAfter = $state(false);
   const isHash = (ref: string) => /^[0-9a-f]{7,40}$/i.test(ref);
   const shortRef = (ref: string) => /^[0-9a-f]{40}$/i.test(ref) ? ref.substring(0, 7) : ref;
   let rebaseBtn: HTMLButtonElement | undefined = $state();
@@ -51,6 +52,16 @@
       <span class="modal-flag-badge">--autostash</span>
     </label>
   </div>
+  <div class="modal-form-group">
+    <label class="modal-checkbox">
+      <input type="checkbox" bind:checked={pushAfter} />
+      <span>{t('rebase.pushAfter')}</span>
+      <span class="modal-flag-badge">--force-with-lease</span>
+    </label>
+  </div>
+  {#if pushAfter}
+    <p class="modal-warning" role="alert"><i class="codicon codicon-warning"></i><span>{t('rebase.pushAfterHint')}</span></p>
+  {/if}
   <div class="form-actions">
     <div class="conflict-status" class:is-warning={conflictPrediction?.hasConflict} class:is-success={conflictPrediction !== null && !conflictPrediction?.hasConflict}>
       {#if conflictPrediction === null}
@@ -69,7 +80,7 @@
       {/if}
     </div>
     <button onclick={onClose}>{t('common.cancel')}</button>
-    <button class="primary" bind:this={rebaseBtn} onclick={() => onRebase({ autostash })}>{t('rebaseBranch.rebase')}</button>
+    <button class="primary" bind:this={rebaseBtn} onclick={() => onRebase({ autostash, pushAfter })}>{t('rebaseBranch.rebase')}</button>
   </div>
 </Modal>
 

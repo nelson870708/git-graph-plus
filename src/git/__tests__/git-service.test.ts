@@ -595,6 +595,68 @@ describe('GitService', () => {
     });
   });
 
+  describe('pushCurrentBranch', () => {
+    let calls: string[][];
+    beforeEach(() => {
+      calls = [];
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+    });
+
+    it('pushes to upstream with no remote/branch args when upstream exists', async () => {
+      (service as any).branches = async () => [
+        { name: 'feature', current: true, upstream: 'origin/feature', ahead: 1, behind: 0, hash: 'abc' },
+      ];
+      await service.pushCurrentBranch({ force: 'with-lease' });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain('push');
+      expect(calls[0]).toContain('--force-with-lease');
+      // upstream case mirrors PushModal: no explicit remote/refspec
+      expect(calls[0].some(a => a.startsWith('refs/heads/'))).toBe(false);
+    });
+
+    it('sets upstream and pushes to default remote when no upstream', async () => {
+      (service as any).branches = async () => [
+        { name: 'feature', current: true, ahead: 0, behind: 0, hash: 'abc' },
+      ];
+      (service as any).cachedRemoteNames = ['origin', 'upstream'];
+      (service as any).remoteNamesCacheTime = Date.now();
+      await service.pushCurrentBranch({ force: 'with-lease' });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain('-u');
+      expect(calls[0]).toContain('origin');
+      expect(calls[0]).toContain('refs/heads/feature');
+      expect(calls[0]).toContain('--force-with-lease');
+    });
+
+    it('falls back to the first remote when origin is absent', async () => {
+      (service as any).branches = async () => [
+        { name: 'feature', current: true, ahead: 0, behind: 0, hash: 'abc' },
+      ];
+      (service as any).cachedRemoteNames = ['upstream', 'fork'];
+      (service as any).remoteNamesCacheTime = Date.now();
+      await service.pushCurrentBranch();
+      expect(calls[0]).toContain('upstream');
+    });
+
+    it('skips push when there are no remotes', async () => {
+      (service as any).branches = async () => [
+        { name: 'feature', current: true, ahead: 0, behind: 0, hash: 'abc' },
+      ];
+      (service as any).cachedRemoteNames = [];
+      (service as any).remoteNamesCacheTime = Date.now();
+      const result = await service.pushCurrentBranch();
+      expect(calls).toHaveLength(0);
+      expect(result).toEqual({ pushed: false, reason: 'no-remote' });
+    });
+
+    it('throws when there is no current branch (detached HEAD)', async () => {
+      (service as any).branches = async () => [
+        { name: 'main', current: false, ahead: 0, behind: 0, hash: 'abc' },
+      ];
+      await expect(service.pushCurrentBranch()).rejects.toThrow('current branch');
+    });
+  });
+
   describe('getRemoteNames caching', () => {
     it('returns cached value within TTL window', async () => {
       let execCalls = 0;

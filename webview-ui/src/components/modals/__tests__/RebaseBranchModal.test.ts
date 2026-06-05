@@ -51,9 +51,21 @@ describe('RebaseBranchModal', () => {
       branch: 'topic', onto: 'main',
       onClose: vi.fn(), onRebase,
     });
-    const autostash = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const autostash = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[0]!;
     await fireEvent.click(autostash);
     await fireEvent.click(container.querySelector<HTMLButtonElement>('button.primary')!);
-    expect(onRebase).toHaveBeenCalledWith({ autostash: true });
+    expect(onRebase).toHaveBeenCalledWith({ autostash: true, pushAfter: false });
+  });
+
+  it('forwards pushAfter flag to onRebase', async () => {
+    const onRebase = vi.fn();
+    const { container } = render(RebaseBranchModal, {
+      branch: 'topic', onto: 'main',
+      onClose: vi.fn(), onRebase,
+    });
+    const pushAfter = container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]!;
+    await fireEvent.click(pushAfter);
+    await fireEvent.click(container.querySelector<HTMLButtonElement>('button.primary')!);
+    expect(onRebase).toHaveBeenCalledWith({ autostash: false, pushAfter: true });
   });
 });

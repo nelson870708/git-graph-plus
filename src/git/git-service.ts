@@ -1034,6 +1034,31 @@ export class GitService {
     return this.execWithAuthRetry(args, remote);
   }
 
+  /**
+   * Pushes the current branch, used by "push after rebase/merge/…" follow-up
+   * actions. Mirrors the PushModal convention: when the branch has an upstream
+   * we push with no remote/refspec (git resolves it from the upstream); when it
+   * doesn't, we set upstream (-u) on the default remote (origin if present, else
+   * the first remote). With no remotes configured the push is skipped.
+   */
+  async pushCurrentBranch(options?: { force?: 'with-lease' | 'force' }): Promise<{ pushed: boolean; reason?: 'no-remote' }> {
+    const current = (await this.branches()).find(b => b.current);
+    if (!current) {
+      throw new GitError('No current branch to push (detached HEAD)', null, []);
+    }
+    if (current.upstream) {
+      await this.push(undefined, undefined, { force: options?.force });
+      return { pushed: true };
+    }
+    const remotes = await this.getRemoteNames();
+    if (remotes.length === 0) {
+      return { pushed: false, reason: 'no-remote' };
+    }
+    const remote = remotes.includes('origin') ? 'origin' : remotes[0];
+    await this.push(remote, current.name, { force: options?.force, setUpstream: true });
+    return { pushed: true };
+  }
+
   async addRemote(name: string, url: string): Promise<void> {
     this.assertSafeRef(name, 'remote add');
     this.assertSafeRemoteUrl(url);

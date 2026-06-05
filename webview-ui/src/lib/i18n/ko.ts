@@ -389,6 +389,8 @@ export const ko: Record<string, string> = {
   'rebaseBranch.desc': '현재 브랜치를 선택한 브랜치 위에 rebase합니다. Commit 히스토리가 재작성됩니다.',
   'rebaseBranch.rebase': 'Rebase',
   'rebase.autostash': '로컬 변경 사항 Stash 후 다시 적용 (tracked only)',
+  'rebase.pushAfter': 'Rebase 성공 후 브랜치 push',
+  'rebase.pushAfterHint': 'Rebase는 히스토리를 재작성하므로 --force-with-lease 사용',
 
   // Reset modal
   'reset.modalTitle': '브랜치를 리비전으로 Reset',

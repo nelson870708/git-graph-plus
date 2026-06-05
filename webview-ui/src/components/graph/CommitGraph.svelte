@@ -1323,7 +1323,7 @@
     branch={branchStore.currentBranch?.name ?? 'current branch'}
     onto={rebaseTarget}
     onClose={() => { showRebaseModal = false; contextMenuHash = null; }}
-    onRebase={(options) => { showRebaseModal = false; contextMenuHash = null; vscode.postMessage({ type: 'rebase', payload: { onto: rebaseTarget, autostash: options.autostash } }); }}
+    onRebase={(options) => { showRebaseModal = false; contextMenuHash = null; vscode.postMessage({ type: 'rebase', payload: { onto: rebaseTarget, autostash: options.autostash, pushAfter: options.pushAfter } }); }}
   />
 {/if}
 

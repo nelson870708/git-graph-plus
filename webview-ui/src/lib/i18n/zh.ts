@@ -389,6 +389,8 @@ export const zh: Record<string, string> = {
   'rebaseBranch.desc': '将当前分支变基到选定的分支上。这将重写提交历史。',
   'rebaseBranch.rebase': '变基',
   'rebase.autostash': '储藏并重新应用本地更改（仅跟踪文件）',
+  'rebase.pushAfter': 'Rebase 成功后 push 分支',
+  'rebase.pushAfterHint': '由于 rebase 会重写历史，将使用 --force-with-lease',
 
   // Reset modal
   'reset.modalTitle': '将分支重置到修订版本',
