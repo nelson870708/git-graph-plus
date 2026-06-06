@@ -1160,7 +1160,11 @@ export class MainPanel {
           break;
         }
         case 'deleteRemoteTag': {
-          await this.gitService.deleteRemoteTag(message.payload.name, message.payload.remote);
+          if (message.payload.remote) {
+            await this.gitService.deleteRemoteTag(message.payload.name, message.payload.remote);
+          } else {
+            await this.gitService.deleteTagFromAllRemotes(message.payload.name);
+          }
           this.post({ type: 'operationComplete', payload: { operation: 'deleteRemoteTag', success: true } });
           await this.refreshAll();
           break;

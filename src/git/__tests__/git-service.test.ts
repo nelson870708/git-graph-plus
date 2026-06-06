@@ -83,6 +83,64 @@ describe('GitService', () => {
     });
   });
 
+  describe('deleteTagFromAllRemotes', () => {
+    it('deletes the tag from every remote', async () => {
+      const calls: string[][] = [];
+      (service as any).cachedRemoteNames = ['origin', 'upstream'];
+      (service as any).remoteNamesCacheTime = Date.now();
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+
+      await service.deleteTagFromAllRemotes('v1.0');
+      expect(calls).toHaveLength(2);
+      expect(calls[0]).toEqual(['push', 'origin', ':refs/tags/v1.0']);
+      expect(calls[1]).toEqual(['push', 'upstream', ':refs/tags/v1.0']);
+    });
+
+    it('skips remotes that do not have the tag and keeps deleting from the rest', async () => {
+      const calls: string[][] = [];
+      (service as any).cachedRemoteNames = ['origin', 'upstream'];
+      (service as any).remoteNamesCacheTime = Date.now();
+      mockExec(service, async (args) => {
+        calls.push(args);
+        if (args[1] === 'origin') {
+          throw new GitError("error: unable to delete 'v1.0': remote ref does not exist", 1, args);
+        }
+        return '';
+      });
+
+      // origin lacks the tag (no-op), upstream still gets deleted — no throw.
+      await expect(service.deleteTagFromAllRemotes('v1.0')).resolves.toBeUndefined();
+      expect(calls).toHaveLength(2);
+    });
+
+    it('surfaces non-skippable errors after attempting every remote', async () => {
+      const calls: string[][] = [];
+      (service as any).cachedRemoteNames = ['origin', 'upstream'];
+      (service as any).remoteNamesCacheTime = Date.now();
+      mockExec(service, async (args) => {
+        calls.push(args);
+        if (args[1] === 'origin') {
+          throw new GitError('fatal: Authentication failed', 128, args);
+        }
+        return '';
+      });
+
+      await expect(service.deleteTagFromAllRemotes('v1.0')).rejects.toThrow('Authentication failed');
+      // upstream was still attempted even though origin failed.
+      expect(calls).toHaveLength(2);
+    });
+
+    it('does nothing with no remotes', async () => {
+      const calls: string[][] = [];
+      (service as any).cachedRemoteNames = [];
+      (service as any).remoteNamesCacheTime = Date.now();
+      mockExec(service, async (args) => { calls.push(args); return ''; });
+
+      await service.deleteTagFromAllRemotes('v1.0');
+      expect(calls).toHaveLength(0);
+    });
+  });
+
   describe('setExtraEnv', () => {
     it('stores extra environment variables', () => {
       service.setExtraEnv({ GIT_ASKPASS: '/usr/bin/askpass' });

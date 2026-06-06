@@ -428,11 +428,11 @@ export const en: Record<string, string> = {
   // Delete tag confirmation
   'deleteTag.title': 'Delete Tag',
   'deleteTag.confirm': 'Are you sure you want to delete tag <span class="modal-pill modal-pill--tag" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span>?',
-  'deleteTag.deleteRemote': 'Also delete from remote',
+  'deleteTag.deleteRemote': 'Also delete from all remotes',
 
   // Delete remote tag confirmation
   'deleteRemoteTag.title': 'Delete Remote Tag',
-  'deleteRemoteTag.confirm': 'Are you sure you want to delete tag <span class="modal-pill modal-pill--danger" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span> from the remote? This <span class="modal-emph modal-emph--danger">cannot be undone</span>.',
+  'deleteRemoteTag.confirm': 'Are you sure you want to delete tag <span class="modal-pill modal-pill--danger" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span> from all remotes? This <span class="modal-emph modal-emph--danger">cannot be undone</span>.',
 
   // Delete remote branch
   'deleteRemoteBranch.title': 'Delete Remote Branch',
@@ -495,7 +495,7 @@ export const en: Record<string, string> = {
   // Defaults
   'deleteBranch.forceWarning': 'Force delete discards the branch even if it has <span class="modal-emph modal-emph--danger">unmerged commits</span>.',
   'deleteBranch.deleteRemoteWarning': 'The branch will also be deleted from the remote. This <span class="modal-emph modal-emph--danger">cannot be undone</span>.',
-  'deleteTag.deleteRemoteWarning': 'The tag will also be deleted from the remote. This <span class="modal-emph modal-emph--danger">cannot be undone</span>.',
+  'deleteTag.deleteRemoteWarning': 'The tag will also be deleted from all remotes. This <span class="modal-emph modal-emph--danger">cannot be undone</span>.',
   'removeWorktree.deleteBranchWarning': 'The worktree\'s branch will also be <span class="modal-emph modal-emph--danger">deleted</span>.',
 
   // Common

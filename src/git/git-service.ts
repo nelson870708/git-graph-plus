@@ -1931,6 +1931,30 @@ export class GitService {
     return this.execWithAuthRetry(['push', r, `:refs/tags/${name}`], r);
   }
 
+  async deleteTagFromAllRemotes(name: string): Promise<void> {
+    this.assertSafeRef(name, 'push :refs/tags');
+    const remotes = await this.getRemoteNames();
+    const errors: unknown[] = [];
+    for (const r of remotes) {
+      try {
+        await this.execWithAuthRetry(['push', r, `:refs/tags/${name}`], r);
+      } catch (err) {
+        // A tag that was never pushed to this remote makes git fail with
+        // "remote ref does not exist" — that's already the desired end state,
+        // so skip it and keep deleting from the remaining remotes. Anything
+        // else (auth, network) is collected and surfaced after every remote
+        // has been attempted, so one bad remote can't block the others.
+        if (err instanceof GitError && /remote ref does not exist/i.test(err.stderr)) {
+          continue;
+        }
+        errors.push(err);
+      }
+    }
+    if (errors.length > 0) {
+      throw errors[0];
+    }
+  }
+
   // --- Image at ref (binary-safe) ---
 
   async getImageBase64(ref: string, filePath: string): Promise<string> {

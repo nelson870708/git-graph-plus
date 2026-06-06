@@ -157,6 +157,42 @@ describe('GitService integration — remote operations (local bare)', () => {
         mirror.cleanup();
       }
     });
+
+    it('deleteTagFromAllRemotes removes the tag from every configured remote', async () => {
+      const mirror = createTempRepo({ bare: true });
+      try {
+        runGit(workRepo.path, ['remote', 'add', 'mirror', mirror.path]);
+        runGit(workRepo.path, ['tag', 'v4.0']);
+        await svc.pushTagToAllRemotes('v4.0');
+        // Sanity: the tag is present on both remotes before deletion.
+        expect(runGit(bareRepo.path, ['for-each-ref', 'refs/tags']).trim()).toContain('v4.0');
+        expect(runGit(mirror.path, ['for-each-ref', 'refs/tags']).trim()).toContain('v4.0');
+
+        await svc.deleteTagFromAllRemotes('v4.0');
+
+        expect(runGit(bareRepo.path, ['for-each-ref', 'refs/tags']).trim()).not.toContain('v4.0');
+        expect(runGit(mirror.path, ['for-each-ref', 'refs/tags']).trim()).not.toContain('v4.0');
+      } finally {
+        mirror.cleanup();
+      }
+    });
+
+    it('deleteTagFromAllRemotes skips remotes that do not have the tag', async () => {
+      const mirror = createTempRepo({ bare: true });
+      try {
+        runGit(workRepo.path, ['remote', 'add', 'mirror', mirror.path]);
+        runGit(workRepo.path, ['tag', 'v5.0']);
+        // Push the tag to origin only; mirror never receives it.
+        await svc.pushTag('v5.0', 'origin');
+
+        // Must not throw even though mirror has no such tag.
+        await expect(svc.deleteTagFromAllRemotes('v5.0')).resolves.toBeUndefined();
+
+        expect(runGit(bareRepo.path, ['for-each-ref', 'refs/tags']).trim()).not.toContain('v5.0');
+      } finally {
+        mirror.cleanup();
+      }
+    });
   });
 
   describe('deleteRemoteBranch', () => {

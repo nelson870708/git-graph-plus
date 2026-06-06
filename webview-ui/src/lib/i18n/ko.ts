@@ -428,11 +428,11 @@ export const ko: Record<string, string> = {
   // Delete tag confirmation
   'deleteTag.title': '태그 삭제',
   'deleteTag.confirm': '태그 <span class="modal-pill modal-pill--tag" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span>을(를) 삭제하시겠습니까?',
-  'deleteTag.deleteRemote': '리모트에서도 삭제',
+  'deleteTag.deleteRemote': '모든 리모트에서도 삭제',
 
   // Delete remote tag confirmation
   'deleteRemoteTag.title': '리모트 태그 삭제',
-  'deleteRemoteTag.confirm': '리모트에서 태그 <span class="modal-pill modal-pill--danger" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span>을(를) 삭제하시겠습니까? 이 작업은 <span class="modal-emph modal-emph--danger">되돌릴 수 없습니다</span>.',
+  'deleteRemoteTag.confirm': '모든 리모트에서 태그 <span class="modal-pill modal-pill--danger" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span>을(를) 삭제하시겠습니까? 이 작업은 <span class="modal-emph modal-emph--danger">되돌릴 수 없습니다</span>.',
 
   // Delete remote branch
   'deleteRemoteBranch.title': '리모트 브랜치 삭제',
@@ -495,7 +495,7 @@ export const ko: Record<string, string> = {
   // Defaults
   'deleteBranch.forceWarning': '병합되지 않은 커밋이 있어도 <span class="modal-emph modal-emph--danger">강제로 삭제</span>합니다.',
   'deleteBranch.deleteRemoteWarning': '리모트에서도 브랜치가 삭제됩니다. <span class="modal-emph modal-emph--danger">되돌릴 수 없습니다</span>.',
-  'deleteTag.deleteRemoteWarning': '리모트에서도 태그가 삭제됩니다. <span class="modal-emph modal-emph--danger">되돌릴 수 없습니다</span>.',
+  'deleteTag.deleteRemoteWarning': '모든 리모트에서 태그가 삭제됩니다. <span class="modal-emph modal-emph--danger">되돌릴 수 없습니다</span>.',
   'removeWorktree.deleteBranchWarning': '워크트리의 브랜치도 <span class="modal-emph modal-emph--danger">함께 삭제</span>됩니다.',
 
   // Common

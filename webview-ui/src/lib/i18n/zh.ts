@@ -428,11 +428,11 @@ export const zh: Record<string, string> = {
   // Delete tag confirmation
   'deleteTag.title': '删除标签',
   'deleteTag.confirm': '确定要删除标签 <span class="modal-pill modal-pill--tag" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span> 吗？',
-  'deleteTag.deleteRemote': '同时从远程仓库删除',
+  'deleteTag.deleteRemote': '同时从所有远程仓库删除',
 
   // Delete remote tag confirmation
   'deleteRemoteTag.title': '删除远程标签',
-  'deleteRemoteTag.confirm': '确定要从远程仓库删除标签 <span class="modal-pill modal-pill--danger" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span> 吗？此操作<span class="modal-emph modal-emph--danger">无法撤销</span>。',
+  'deleteRemoteTag.confirm': '确定要从所有远程仓库删除标签 <span class="modal-pill modal-pill--danger" title="{name}"><i class="codicon codicon-tag"></i><span class="modal-pill-text">{name}</span></span> 吗？此操作<span class="modal-emph modal-emph--danger">无法撤销</span>。',
 
   // Delete remote branch
   'deleteRemoteBranch.title': '删除远程分支',
@@ -495,7 +495,7 @@ export const zh: Record<string, string> = {
   // Defaults
   'deleteBranch.forceWarning': '即使存在<span class="modal-emph modal-emph--danger">未合并的提交</span>也会强制删除分支。',
   'deleteBranch.deleteRemoteWarning': '将同时从远程删除该分支。此操作<span class="modal-emph modal-emph--danger">无法撤销</span>。',
-  'deleteTag.deleteRemoteWarning': '将同时从远程删除该标签。此操作<span class="modal-emph modal-emph--danger">无法撤销</span>。',
+  'deleteTag.deleteRemoteWarning': '将同时从所有远程仓库删除该标签。此操作<span class="modal-emph modal-emph--danger">无法撤销</span>。',
   'removeWorktree.deleteBranchWarning': '工作树的分支也将<span class="modal-emph modal-emph--danger">一并删除</span>。',
 
   // Common
