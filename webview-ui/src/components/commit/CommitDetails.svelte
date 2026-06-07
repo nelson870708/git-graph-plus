@@ -336,6 +336,17 @@
     return sortTree(root.children);
   }
 
+  // All changed-file paths under a tree node (the node itself if it's a file).
+  function collectFilePaths(node: FileTreeNode): string[] {
+    return node.isFile ? [node.path] : node.children.flatMap(collectFilePaths);
+  }
+
+  // A folder counts as selected when every changed file under it is selected.
+  function isFolderSelected(node: FileTreeNode): boolean {
+    const filesUnder = collectFilePaths(node);
+    return filesUnder.length > 0 && filesUnder.every(p => selectedPatchFiles.has(p));
+  }
+
   let fileTree = $derived(buildFileTree(files));
 
   // Auto-expand all directories when files change
@@ -780,8 +791,28 @@
               {:else}
                 <button
                   class="dir-item"
+                  class:selected={isFolderSelected(node)}
                   style="padding-left: {8 + depth * 16}px;"
-                  onclick={() => toggleDir(node.path)}
+                  onclick={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && commit) {
+                      // Add/remove every changed file under this folder.
+                      const filesUnder = collectFilePaths(node);
+                      const next = new Set(selectedPatchFiles);
+                      const allSelected = filesUnder.length > 0 && filesUnder.every(p => next.has(p));
+                      if (allSelected) {
+                        for (const p of filesUnder) next.delete(p);
+                        if (selectedFile && filesUnder.includes(selectedFile)) {
+                          selectedFile = next.size > 0 ? [...next][next.size - 1] : null;
+                        }
+                      } else {
+                        for (const p of filesUnder) next.add(p);
+                        if (filesUnder.length > 0) selectedFile = filesUnder[filesUnder.length - 1];
+                      }
+                      selectedPatchFiles = next;
+                      return;
+                    }
+                    toggleDir(node.path);
+                  }}
                   oncontextmenu={(e) => {
                     e.preventDefault();
                     if (!commit) return;
@@ -1229,6 +1260,7 @@
 
   .file-item:hover, .dir-item:hover { background: var(--bg-hover); }
   .file-item.selected { background: var(--bg-selected); color: var(--text-selected); }
+  .dir-item.selected { background: var(--bg-selected); color: var(--text-selected); }
 
   .dir-item {
     color: var(--text-secondary);
