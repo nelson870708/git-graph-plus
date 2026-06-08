@@ -242,6 +242,22 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       expect(result.hasConflict).toBe(true);
     });
 
+    it('reports the correct path for a modify/delete conflict', async () => {
+      // main deletes a file the topic modifies → modify/delete conflict. The
+      // prose CONFLICT line for this type embeds commit hashes, so the file
+      // name must come from the structured file-info section, not the prose.
+      commit(repo.path, 'init', { 'doomed.txt': 'base\n', 'keep.txt': 'k\n' });
+      runGit(repo.path, ['checkout', '-b', 'topic']);
+      commit(repo.path, 'topic edits doomed', { 'doomed.txt': 'edited\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      runGit(repo.path, ['rm', 'doomed.txt']);
+      commit(repo.path, 'main deletes doomed');
+
+      const result = await svc.predictRebaseConflicts('topic', 'main');
+      expect(result.hasConflict).toBe(true);
+      expect(result.files).toEqual(['doomed.txt']);
+    });
+
     it('flags truncated when the branch has more than 20 commits to replay', async () => {
       commit(repo.path, 'init', { 'a.txt': 'base\n' });
       runGit(repo.path, ['checkout', '-b', 'topic']);
@@ -306,9 +322,11 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
       expect(typeof result.hasConflict).toBe('boolean');
     });
 
-    it('aggregates conflict files across multiple commits in the topic', async () => {
-      // Multi-commit topic with each commit touching a different conflicting
-      // file. Verifies the per-commit walk loop merges files into a Set.
+    it('stops at the first conflicting commit and reports its files', async () => {
+      // Multi-commit topic where the first replayed commit (edits a) already
+      // conflicts. A real rebase halts there, so the prediction reports that
+      // commit's files rather than walking ahead to b (which the user would
+      // only reach after resolving a and running `rebase --continue`).
       commit(repo.path, 'init', { 'a.txt': 'base\n', 'b.txt': 'base\n' });
       runGit(repo.path, ['checkout', '-b', 'topic']);
       commit(repo.path, 'topic edits a', { 'a.txt': 'topic-a\n' });
@@ -319,8 +337,25 @@ describe('GitService integration — merge / rebase / cherry-pick / revert', () 
 
       const result = await svc.predictRebaseConflicts('topic', 'main');
       expect(result.hasConflict).toBe(true);
-      // Both files should be reported (deduped via the Set).
-      expect(result.files.sort()).toEqual(['a.txt', 'b.txt']);
+      expect(result.files).toEqual(['a.txt']);
+    });
+
+    it('does not flag a phantom conflict when a later commit edits a file an earlier commit added', async () => {
+      // Regression: the topic adds feat.txt then edits it in the next commit,
+      // while main advances on an unrelated file. A real rebase is clean
+      // because feat.txt exists once the first commit replays. The old logic
+      // probed each commit against the original `onto` (which never had
+      // feat.txt) and reported a phantom modify/delete conflict.
+      commit(repo.path, 'init', { 'base.txt': 'base\n' });
+      runGit(repo.path, ['checkout', '-b', 'topic']);
+      commit(repo.path, 'topic adds feat', { 'feat.txt': 'v1\n' });
+      commit(repo.path, 'topic edits feat', { 'feat.txt': 'v2\n' });
+      runGit(repo.path, ['checkout', 'main']);
+      commit(repo.path, 'main unrelated', { 'main.txt': 'm\n' });
+
+      const result = await svc.predictRebaseConflicts('topic', 'main');
+      expect(result.hasConflict).toBe(false);
+      expect(result.files).toEqual([]);
     });
   });
 

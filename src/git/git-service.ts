@@ -697,7 +697,7 @@ export class GitService {
    *  "this particular call failed with a bad ref / missing object"
    *  (transient, must not poison the capability flag). */
   private mergeTreeCheck(ours: string, theirs: string, mergeBase?: string): Promise<
-    | { kind: 'ok'; value: { hasConflict: boolean; files: string[] } }
+    | { kind: 'ok'; value: { hasConflict: boolean; files: string[]; tree?: string } }
     | { kind: 'unknown-option' }
     | { kind: 'error' }
   > {
@@ -716,29 +716,48 @@ export class GitService {
       proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
       proc.on('close', (code) => {
         clearTimeout(timer);
+        // merge-tree --write-tree output (no -z) is:
+        //   <tree OID>
+        //   <conflicted file info>   (one "<mode> <oid> <stage>\t<path>" per
+        //                             conflicted index entry; empty when clean)
+        //   <blank line>
+        //   <informational messages> ("CONFLICT (...)" prose, "Auto-merging …")
+        const lines = stdout.split('\n');
+        const firstLine = lines[0]?.trim();
+        // The first line is the merged tree OID (present on both clean and
+        // conflicted merges). Callers chain it as the `ours` of the next probe
+        // to simulate a sequential rebase.
+        const tree = firstLine && /^[0-9a-f]{7,64}$/.test(firstLine) ? firstLine : undefined;
         if (code === 0) {
-          resolve({ kind: 'ok', value: { hasConflict: false, files: [] } });
+          resolve({ kind: 'ok', value: { hasConflict: false, files: [], tree } });
           return;
         }
         if (stderr.includes('unknown option') || stderr.includes('unrecognized argument')) {
           resolve({ kind: 'unknown-option' });
           return;
         }
-        // git merge-tree exits 1 on a real conflict (with CONFLICT lines on
-        // stdout) and ~128 on an error like a bad ref / missing object.
+        // git merge-tree exits 1 on a real conflict (with the file-info section
+        // populated) and ~128 on an error like a bad ref / missing object.
         // Treating every non-zero exit as conflict produced phantom
-        // "0 conflicting files" banners; gate on real CONFLICT output.
-        const files = stdout.split('\n')
-          .filter(l => l.startsWith('CONFLICT'))
-          .map(l => l.match(/in (.+)$/)?.[1])
-          .filter((f): f is string => !!f);
-        if (code === 1 && files.length > 0) {
-          resolve({ kind: 'ok', value: { hasConflict: true, files } });
-          return;
+        // "0 conflicting files" banners; gate on real conflict output.
+        //
+        // Read the conflicting paths from the structured file-info section
+        // rather than the prose "CONFLICT (...)" lines: the prose wording
+        // varies by conflict type (content / modify-delete / rename / …), so
+        // scraping it mis-parsed everything except plain content conflicts
+        // (e.g. a modify/delete line yielded the commit hash, not the path).
+        const files: string[] = [];
+        const seen = new Set<string>();
+        for (let i = 1; i < lines.length; i++) {
+          if (lines[i] === '') break; // blank line terminates the file-info section
+          const m = lines[i].match(/^[0-7]{6} [0-9a-f]+ [1-3]\t(.+)$/);
+          if (m && !seen.has(m[1])) { seen.add(m[1]); files.push(m[1]); }
         }
-        if (code === 1 && stdout.includes('CONFLICT')) {
-          // Conflict signaled but path could not be parsed — still surface.
-          resolve({ kind: 'ok', value: { hasConflict: true, files: [] } });
+        const hasConflictMsg = stdout.includes('CONFLICT');
+        if (code === 1 && (files.length > 0 || hasConflictMsg)) {
+          // files may be empty if a conflict was signaled but left no index
+          // entries (unusual) — still surface the conflict.
+          resolve({ kind: 'ok', value: { hasConflict: true, files, tree } });
           return;
         }
         // Anything else is a transient error (invalid ref, missing object, OOM).
@@ -757,7 +776,7 @@ export class GitService {
       const result = await this.mergeTreeCheck(ours, theirs, mergeBase);
       if (result.kind === 'ok') {
         this.mergeBaseSupported = true;
-        return result.value;
+        return { hasConflict: result.value.hasConflict, files: result.value.files };
       }
       if (result.kind === 'unknown-option') {
         // Old git (<2.40) — permanently fall back to the no-mergeBase form
@@ -770,7 +789,7 @@ export class GitService {
     }
     const fallback = await this.mergeTreeCheck(ours, theirs);
     return fallback.kind === 'ok'
-      ? fallback.value
+      ? { hasConflict: fallback.value.hasConflict, files: fallback.value.files }
       : { hasConflict: false, files: [] };
   }
 
@@ -807,51 +826,51 @@ export class GitService {
     const PROBE_LIMIT = 20;
     const truncated = commitList.length > PROBE_LIMIT;
     const commits = commitList.slice(0, PROBE_LIMIT);
-    const conflictFiles = new Set<string>();
 
-    // Probe one commit's conflicts. Prefers the per-commit isolation form
-    // (C^ as merge base, git 2.40+) so each commit's own diff is checked in
-    // isolation; falls back to the cumulative merge-base..commit form on old
-    // git or when the isolation form errors (e.g. an orphan commit with no
-    // parent). Returns the conflicting files for this commit (empty if none).
-    const probeCommit = async (commit: string): Promise<string[]> => {
+    // Replay each commit sequentially onto an accumulating tree, mirroring how
+    // a real rebase applies commits one after another. The key is *chaining*:
+    // merge-tree --write-tree prints the merged tree OID, which we feed as the
+    // `ours` of the next probe. That lets a commit see the files introduced by
+    // earlier commits on the same branch. Probing every commit against the
+    // original `onto` (the previous implementation) produced phantom conflicts
+    // for the common "add a file in one commit, edit it in the next" pattern —
+    // the editing commit looked like a modify/delete against an `onto` that
+    // never had the file. Like a real rebase, we stop at the first conflicting
+    // commit: once a step conflicts there is no resolved tree to chain from, so
+    // we report that commit's files and surface the conflict.
+    let ours = onto;
+    for (const commit of commits) {
       if (this.mergeBaseSupported !== false) {
-        const result = await this.mergeTreeCheck(onto, commit, `${commit}^`);
+        const result = await this.mergeTreeCheck(ours, commit, `${commit}^`);
         if (result.kind === 'unknown-option') {
-          // Old git: switch to fallback for the lifetime of the service.
+          // Old git (<2.40): no --merge-base, so the isolation/chaining form
+          // is unavailable. Switch to the cumulative fallback for good.
           this.mergeBaseSupported = false;
         } else if (result.kind === 'ok') {
           this.mergeBaseSupported = true;
-          return result.value.hasConflict ? result.value.files : [];
+          if (result.value.hasConflict) {
+            return { hasConflict: true, files: result.value.files, truncated };
+          }
+          if (result.value.tree) {
+            ours = result.value.tree;
+            continue;
+          }
+          // No tree OID to chain (unexpected on 2.40+) — fall through to the
+          // cumulative probe so we don't silently skip this commit.
         }
         // 'error': fall through to the cumulative fallback for this commit only.
       }
+      // Old git / fallback: cumulative merge-base..commit diff against the
+      // original `onto`. We can't chain trees here (a bare tree has no history
+      // for git to derive a merge base from), so this keeps the legacy, over-
+      // reporting behavior — acceptable for the rare pre-2.40 git.
       const result = await this.mergeTreeCheck(onto, commit);
-      return result.kind === 'ok' && result.value.hasConflict ? result.value.files : [];
-    };
-
-    // Probe the first commit on its own so the git-2.40 capability flag
-    // (mergeBaseSupported) is settled before fanning out — otherwise an old
-    // git would waste a rejected --merge-base attempt on every parallel probe.
-    (await probeCommit(commits[0])).forEach(f => conflictFiles.add(f));
-
-    // Replay the rest with bounded concurrency. merge-tree is read-only
-    // (--write-tree only creates throwaway objects), so parallel probes are
-    // safe; the cap keeps us from spawning up to 19 git processes at once.
-    const CONCURRENCY = 4;
-    const rest = commits.slice(1);
-    let next = 0;
-    const worker = async () => {
-      while (next < rest.length) {
-        const commit = rest[next++];
-        (await probeCommit(commit)).forEach(f => conflictFiles.add(f));
+      if (result.kind === 'ok' && result.value.hasConflict) {
+        return { hasConflict: true, files: result.value.files, truncated };
       }
-    };
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, rest.length) }, worker),
-    );
+    }
 
-    return { hasConflict: conflictFiles.size > 0, files: [...conflictFiles], truncated };
+    return { hasConflict: false, files: [], truncated };
   }
 
   async merge(branch: string, options?: { noFf?: boolean; ffOnly?: boolean; squash?: boolean }): Promise<void> {

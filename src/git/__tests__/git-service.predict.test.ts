@@ -68,14 +68,62 @@ describe('predictConflicts fallbacks', () => {
     expect(spawnArgs[1].join(' ')).not.toContain('--merge-base');
   });
 
-  it('reports conflicting files parsed from CONFLICT lines', async () => {
+  it('reports conflicting files from the structured file-info section, deduped across stages', async () => {
     const service = new GitService('/tmp/repo');
-    responses = [
-      { stdout: 'CONFLICT (content): Merge conflict in src/a.ts\nCONFLICT (content): Merge conflict in src/b.ts\n', code: 1 },
-    ];
+    // Real `merge-tree --write-tree` output: tree OID, then one
+    // "<mode> <oid> <stage>\t<path>" line per conflicted index entry (each
+    // file shows up at stages 1/2/3), a blank line, then the prose messages.
+    const treeOid = 'a'.repeat(40);
+    const oid = (n: number) => n.toString(16).padStart(40, '0');
+    responses = [{
+      code: 1,
+      stdout:
+        `${treeOid}\n` +
+        `100644 ${oid(1)} 1\tsrc/a.ts\n` +
+        `100644 ${oid(2)} 2\tsrc/a.ts\n` +
+        `100644 ${oid(3)} 3\tsrc/a.ts\n` +
+        `100644 ${oid(4)} 1\tsrc/b.ts\n` +
+        `100644 ${oid(5)} 2\tsrc/b.ts\n` +
+        `100644 ${oid(6)} 3\tsrc/b.ts\n` +
+        `\n` +
+        `Auto-merging src/a.ts\n` +
+        `CONFLICT (content): Merge conflict in src/a.ts\n` +
+        `Auto-merging src/b.ts\n` +
+        `CONFLICT (content): Merge conflict in src/b.ts\n`,
+    }];
     const result = await service.predictConflicts('ours', 'theirs', 'base');
     expect(result.hasConflict).toBe(true);
     expect(result.files).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+
+  it('parses the path for a modify/delete conflict (not the commit hash in the prose)', async () => {
+    const service = new GitService('/tmp/repo');
+    // The prose line embeds " in <hash>" multiple times; the old regex grabbed
+    // the hash. The file-info section carries the real path.
+    const treeOid = 'b'.repeat(40);
+    responses = [{
+      code: 1,
+      stdout:
+        `${treeOid}\n` +
+        `100644 ${'1'.repeat(40)} 1\tg.txt\n` +
+        `100644 ${'3'.repeat(40)} 3\tg.txt\n` +
+        `\n` +
+        `CONFLICT (modify/delete): g.txt deleted in ${'c'.repeat(40)} and modified in ${'d'.repeat(40)}. Version ${'d'.repeat(40)} of g.txt left in tree.\n`,
+    }];
+    const result = await service.predictConflicts('ours', 'theirs', 'base');
+    expect(result.hasConflict).toBe(true);
+    expect(result.files).toEqual(['g.txt']);
+  });
+
+  it('surfaces a conflict even when no file-info entries are present', async () => {
+    const service = new GitService('/tmp/repo');
+    responses = [{
+      code: 1,
+      stdout: `${'e'.repeat(40)}\n\nCONFLICT (rename/rename): foo renamed to bar and baz\n`,
+    }];
+    const result = await service.predictConflicts('ours', 'theirs', 'base');
+    expect(result.hasConflict).toBe(true);
+    expect(result.files).toEqual([]);
   });
 
   it('returns no-conflict when both the primary and fallback checks error out', async () => {
