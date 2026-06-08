@@ -243,11 +243,11 @@ export class MainPanel {
     this.isFirstGetLog = true;
     this.currentRemoteFilter = undefined;
     this.currentBranchFilter = undefined;
-    this.logSequence = 0;
-    this.searchSequence = 0;
-    this.commitFilesSequence.reset();
-    this.fileDiffSequence.reset();
-    this.multiCommitSectionsSequence.reset();
+    // NOTE: the sequence guards (logSequence/searchSequence/*Sequence) must NOT
+    // be reset here. They are monotonic for the panel's lifetime so a request
+    // still in flight against the old repo can never share a seq with a fresh
+    // request against the new one — resetting reuses numbers and lets a stale
+    // response paint the previous repo's graph over the current one.
 
     const oldWatcher = this.fileWatcher;
     oldWatcher.dispose();
@@ -1258,16 +1258,13 @@ export class MainPanel {
           this.repoPath = newPath;
           this.gitService = this.createGitService(newPath);
 
-          // Reset repo-specific state
+          // Reset repo-specific state. The sequence guards are intentionally
+          // left untouched — see switchRepo() for why resetting them lets a
+          // stale in-flight response paint the previous repo's graph.
           this.allConflictFiles = [];
           this.isFirstGetLog = true;
           this.currentRemoteFilter = undefined;
           this.currentBranchFilter = undefined;
-          this.logSequence = 0;
-          this.searchSequence = 0;
-          this.commitFilesSequence.reset();
-          this.fileDiffSequence.reset();
-          this.multiCommitSectionsSequence.reset();
 
           const oldWatcher = this.fileWatcher;
           oldWatcher.dispose();
@@ -1517,8 +1514,17 @@ export class MainPanel {
     try {
       const sortOrder = vscode.workspace.getConfiguration('gitGraphPlus').get<'author-date' | 'date' | 'topological'>('graphSortOrder', 'topological');
       const refreshLimit = this.currentLimit || 1000;
+      // Until the webview's first getLog establishes this session's filter,
+      // mirror the saved filter that getLog will apply (same logic as the
+      // getLog handler). Otherwise an early refresh — triggered by the file
+      // watcher, a repo auto-switch, or a config change before that first
+      // getLog — renders the full *unfiltered* graph (all branches/remotes),
+      // which the filtered getLog then corrects: a visible flash of a tangled,
+      // repo-unrelated "demo"-looking graph.
+      const remoteFilter = this.isFirstGetLog ? MainPanel.savedRemoteFilter : this.currentRemoteFilter;
+      const branchFilter = this.isFirstGetLog ? MainPanel.savedBranchFilter : this.currentBranchFilter;
       const [allFetched, branches, tags, remotes, stashes, worktrees] = await Promise.all([
-        this.gitService.log({ limit: refreshLimit + 1, sortOrder, remoteFilter: this.currentRemoteFilter, branches: this.currentBranchFilter }),
+        this.gitService.log({ limit: refreshLimit + 1, sortOrder, remoteFilter, branches: branchFilter }),
         this.gitService.branches(),
         this.gitService.tags(),
         this.gitService.remotes(),
@@ -1534,7 +1540,7 @@ export class MainPanel {
       this.post({
         type: 'fullRefresh',
         payload: {
-          logData: { commits: allCommits, hasMore, currentLimit: this.currentLimit, graph: [], paths: fg.paths, links: fg.links, dots: fg.dots, commitLeftMargin: fg.commitLeftMargin, remoteFilter: this.currentRemoteFilter, branches: this.currentBranchFilter },
+          logData: { commits: allCommits, hasMore, currentLimit: this.currentLimit, graph: [], paths: fg.paths, links: fg.links, dots: fg.dots, commitLeftMargin: fg.commitLeftMargin, remoteFilter, branches: branchFilter },
           branchData: { branches, tags, remotes, stashes, worktrees },
         },
       });

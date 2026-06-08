@@ -286,4 +286,65 @@ describe('MainPanel orchestration logic', () => {
     expect(diffs).toHaveLength(1);
     expect(diffs[0].payload!.file).toBe('b.ts');
   });
+
+  it('discards a stale getLog from the previous repo after switching repos', async () => {
+    // Two repos so the switchRepo allow-list check passes.
+    H.repos = [
+      { path: '/repo', name: 'repo', type: 'root' },
+      { path: '/repo-b', name: 'repo-b', type: 'nested' },
+    ];
+    await dispatch({ type: 'getRepoList' }); // populate cachedRepos
+
+    // First getLog (against the old repo) is held in-flight; later log() calls
+    // (the switch's refreshAll + the new repo's getLog) return the new commits.
+    let resolveOld!: (v: unknown) => void;
+    H.git.log
+      .mockImplementationOnce(() => new Promise(r => { resolveOld = r as (v: unknown) => void; }))
+      .mockResolvedValue([commit('bbbbbbb2')] as never);
+
+    const pOld = dispatch({ type: 'getLog', payload: {} }); // old repo, in-flight
+
+    // Switching must not reset the sequence counter, or the next getLog reuses
+    // the same seq number and the stale in-flight response sneaks past the guard.
+    await dispatch({ type: 'switchRepo', payload: { path: '/repo-b' } });
+    await dispatch({ type: 'getLog', payload: {} }); // new repo
+
+    // The old repo's log resolves late with its (foreign) commits.
+    resolveOld([commit('aaaaaaa1')]);
+    await pOld;
+
+    const logs = postedOfType('logData');
+    const lastCommits = logs.at(-1)!.payload!.commits as Array<{ hash: string }>;
+    expect(lastCommits.map(c => c.hash)).toEqual(['bbbbbbb2']);
+    // The foreign commit from the old repo must never reach the webview.
+    expect(logs.some(l => (l.payload!.commits as Array<{ hash: string }>).some(c => c.hash === 'aaaaaaa1'))).toBe(false);
+  });
+
+  it('refreshAll applies the saved filter before the first getLog so it does not flash the full unfiltered graph', async () => {
+    const M = MainPanel as unknown as { savedRemoteFilter?: string[]; savedBranchFilter?: string[] };
+    const prevRemote = M.savedRemoteFilter;
+    const prevBranch = M.savedBranchFilter;
+    M.savedRemoteFilter = ['origin'];
+    M.savedBranchFilter = ['main'];
+    try {
+      H.git.log.mockResolvedValue([commit('aaaaaaa1')] as never);
+
+      // An early refresh (file watcher / repo auto-switch / config change) can
+      // fire before the webview's first getLog establishes the session filter.
+      await (MainPanel.currentPanel as unknown as { refreshAll(): Promise<void> }).refreshAll();
+
+      const logArgs = H.git.log.mock.calls.at(-1)![0] as { remoteFilter?: unknown; branches?: unknown };
+      expect(logArgs.remoteFilter).toEqual(['origin']);
+      expect(logArgs.branches).toEqual(['main']);
+
+      // The graph payload must carry the same filter the webview will keep.
+      const refresh = postedOfType('fullRefresh').at(-1)!;
+      const logData = (refresh.payload as { logData: { remoteFilter?: unknown; branches?: unknown } }).logData;
+      expect(logData.remoteFilter).toEqual(['origin']);
+      expect(logData.branches).toEqual(['main']);
+    } finally {
+      M.savedRemoteFilter = prevRemote;
+      M.savedBranchFilter = prevBranch;
+    }
+  });
 });
