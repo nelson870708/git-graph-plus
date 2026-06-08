@@ -509,7 +509,7 @@
     }
     // Not armed: modifiers are ignored; plain click single-selects (debounced).
     if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
-    clickTimer = setTimeout(() => { clickTimer = null; selectCommit(commit.hash); }, 200);
+    clickTimer = setTimeout(() => { clickTimer = null; selectCommit(commit.hash); }, 150);
   }
 
   // Derive the hovered row from the pointer's Y position over the whole scroll
