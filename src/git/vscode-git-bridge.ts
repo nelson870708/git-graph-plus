@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import { samePath } from '../utils/path';
 
 /**
  * Minimal shape of the built-in `vscode.git` extension API that we use here.
@@ -17,13 +17,6 @@ interface GitApi {
 
 interface GitExtension {
   getAPI(version: 1): GitApi;
-}
-
-function samePath(a: string, b: string): boolean {
-  // VS Code's git extension stores repository roots with the OS-native casing;
-  // resolve both sides so e.g. `/Users/foo/../foo/proj` and `/Users/foo/proj`
-  // compare equal.
-  return path.resolve(a) === path.resolve(b);
 }
 
 async function getGitApi(): Promise<GitApi | null> {

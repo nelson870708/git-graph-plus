@@ -4,6 +4,7 @@ import { readFile, access } from 'fs/promises';
 import { GitService, GitError } from '../git/git-service';
 import { formatGitError, isAuthFailure, transportFromRemoteUrl } from '../git/git-error-formatter';
 import { splitUpstreamRef } from '../git/git-parser';
+import { samePath } from '../utils/path';
 import { buildFullGraph } from '../git/git-graph-builder';
 import { triggerVSCodeGitAuth } from '../git/vscode-git-bridge';
 import { FileWatcher } from '../services/file-watcher';
@@ -235,7 +236,7 @@ export class MainPanel {
   }
 
   public async switchRepo(newPath: string): Promise<void> {
-    if (path.resolve(newPath) === path.resolve(this.repoPath)) { return; }
+    if (samePath(newPath, this.repoPath)) { return; }
     this.repoPath = newPath;
     this.gitService = this.createGitService(newPath);
 

@@ -13,6 +13,7 @@ import { StashesViewProvider } from './views/stashes-view';
 import { WorktreesViewProvider } from './views/worktrees-view';
 import { StatusBarManager } from './views/status-bar';
 import { RepoDiscoveryService } from './services/repo-discovery';
+import { samePath } from './utils/path';
 
 /**
  * Resolve the `git.path` setting to an existing executable. The setting may be
@@ -166,7 +167,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- Auto-detect Git Repo if root isn't one ---
   RepoDiscoveryService.discoverRepos([activeRepoPath]).then(repos => {
-    if (repos.length > 0 && !repos.some(r => path.resolve(r.path) === path.resolve(activeRepoPath))) {
+    if (repos.length > 0 && !repos.some(r => samePath(r.path, activeRepoPath))) {
       const firstRepo = repos[0].path;
       activeRepoPath = firstRepo;
       activeGitService = new GitService(activeRepoPath);
@@ -265,7 +266,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   function switchToRepo(newPath: string) {
-    if (path.resolve(newPath) === path.resolve(activeRepoPath)) { return; }
+    if (samePath(newPath, activeRepoPath)) { return; }
     activeRepoPath = newPath;
     activeGitService = new GitService(newPath);
 
