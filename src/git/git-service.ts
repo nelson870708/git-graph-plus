@@ -1223,13 +1223,11 @@ export class GitService {
   private shellEscapeForExec(s: string): string {
     return `'${s.replace(/'/g, "'\\''")}'`;
   }
-
-  private buildMFlags(parts: string[]): string {
-    return parts
-      .map(p => p.trim())
-      .filter(Boolean)
-      .map(p => `-m ${this.shellEscapeForExec(p)}`)
-      .join(' ');
+  /** Build amend command for interactive rebase exec lines.
+   *  Single-line → `git commit --amend --no-edit -m 'msg'`.
+   *  Multi-line → `printf '%s\n' ... | git commit --amend -F -` (POSIX, no temp files). */
+  private buildAmendCommand(message: string): string {
+    return buildAmendCommandStr(message, s => this.shellEscapeForExec(s));
   }
 
   /**
@@ -1260,7 +1258,6 @@ export class GitService {
       );
     }
 
-    // Write todo list to a temp file (avoids shell injection)
     const isSquashLike = (a: string) => a === 'squash' || a === 'fixup';
     const lines: string[] = [];
     let i = 0;
@@ -1293,7 +1290,7 @@ export class GitService {
         // Without this, fixup-only groups would silently discard the user's edited message, and
         // squash groups would inherit git's default-editor combined message.
         if (finalMessage && (messageChanged || userWantsReword)) {
-          lines.push(`exec git commit --amend --no-edit ${this.buildMFlags([finalMessage])}`);
+          lines.push(`exec ${this.buildAmendCommand(finalMessage)}`);
         }
         continue;
       }
@@ -1303,12 +1300,11 @@ export class GitService {
         const msg = (todo.message ?? todo.subject).trim();
         lines.push(`pick ${todo.hash}`);
         if (msg) {
-          lines.push(`exec git commit --amend --no-edit ${this.buildMFlags([msg])}`);
+          lines.push(`exec ${this.buildAmendCommand(msg)}`);
         }
         i++;
         continue;
       }
-
       lines.push(`${todo.action} ${todo.hash}`);
       i++;
     }
@@ -1359,7 +1355,6 @@ export class GitService {
         });
       });
     } finally {
-      // Clean up temp file
       await unlink(todoFile).catch(() => {});
     }
   }
@@ -2090,4 +2085,17 @@ export class GitService {
     } catch (err) { console.warn('Git Graph+: flow init check failed:', err instanceof Error ? err.message : err); return false; }
   }
 
+}
+
+/**
+ * Build a `git commit --amend` command for use in interactive rebase exec lines.
+ * Single-line messages → `--no-edit -m 'msg'`.
+ * Multi-line messages → POSIX printf pipeline to preserve newlines.
+ */
+export function buildAmendCommandStr(message: string, escape: (s: string) => string): string {
+  if (!message.includes('\n')) {
+    return `git commit --amend --no-edit -m ${escape(message)}`;
+  }
+  const parts = message.split('\n').map(l => escape(l));
+  return `printf '%s\\n' ${parts.join(' ')} | git commit --amend -F -`;
 }

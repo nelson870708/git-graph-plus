@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { getVsCodeApi } from '../../lib/vscode-api';
   import { t } from '../../lib/i18n/index.svelte';
   import type { Commit } from '../../lib/types';
@@ -21,6 +21,7 @@
     action: 'pick' | 'squash' | 'fixup' | 'reword' | 'edit' | 'drop';
     hash: string;
     subject: string;
+    body: string;
     newMessage?: string;
   }
 
@@ -56,15 +57,80 @@
     return 'none';
   }));
 
+  function autoresize(node: HTMLTextAreaElement) {
+    function resize() {
+      node.style.height = 'auto';
+      node.style.height = node.scrollHeight + 'px';
+    }
+    // Defer initial resize until after value binding is applied
+    tick().then(resize);
+    node.addEventListener('input', resize);
+    return {
+      destroy() { node.removeEventListener('input', resize); },
+      update() { tick().then(resize); },
+    };
+  }
+
+  function fullMessage(todo: TodoEntry): string {
+    return todo.body ? `${todo.subject}\n\n${todo.body}` : todo.subject;
+  }
+
+  function squashGroupMessage(startIndex: number): string {
+    const parts: string[] = [];
+    let i = startIndex;
+    parts.push(fullMessage(todos[i]));
+    i++;
+    while (i < todos.length && (todos[i].action === 'squash' || todos[i].action === 'fixup')) {
+      if (todos[i].action === 'squash') {
+        parts.push(fullMessage(todos[i]));
+      }
+      i++;
+    }
+    return parts.join('\n\n');
+  }
+
+  /** Fingerprint of a squash group — changes when members or their actions change. */
+  function squashFingerprint(startIndex: number): string {
+    let i = startIndex;
+    let fp = todos[i].hash;
+    i++;
+    while (i < todos.length && (todos[i].action === 'squash' || todos[i].action === 'fixup')) {
+      fp += '|' + todos[i].hash + ':' + todos[i].action;
+      i++;
+    }
+    return fp;
+  }
+
+  const groupPrints = $state<Record<number, string>>({});
+
   $effect.pre(() => {
-    todos.forEach((todo, i) => {
+    let i = 0;
+    while (i < todos.length) {
+      const todo = todos[i];
       const role = squashGroups[i];
-      if (role === 'squash-target' && todo.newMessage === undefined) {
-        todos[i].newMessage = todo.subject;
-      } else if (role !== 'squash-target' && todo.action !== 'reword' && todo.newMessage !== undefined) {
+      if (role === 'squash-target') {
+        const fp = squashFingerprint(i);
+        if (groupPrints[i] !== fp) {
+          // Group composition changed — reset to new combined message
+          groupPrints[i] = fp;
+          todos[i].newMessage = squashGroupMessage(i);
+        } else if (todo.newMessage === undefined) {
+          // First time — initialize
+          todos[i].newMessage = squashGroupMessage(i);
+        }
+        // Clear message on squash members
+        i++;
+        while (i < todos.length && (todos[i].action === 'squash' || todos[i].action === 'fixup')) {
+          todos[i].newMessage = undefined;
+          i++;
+        }
+        continue;
+      }
+      if (todo.action !== 'reword' && todo.newMessage !== undefined) {
         todos[i].newMessage = undefined;
       }
-    });
+      i++;
+    }
   });
 
   onMount(() => {
@@ -75,6 +141,7 @@
           action: 'pick' as const,
           hash: c.hash,
           subject: c.subject,
+          body: c.body,
         }));
         initialOrder = msg.payload.commits.map((c: Commit) => c.hash);
         loading = false;
@@ -97,7 +164,7 @@
   function setAction(index: number, action: TodoEntry['action']) {
     todos[index].action = action;
     if (action === 'reword') {
-      todos[index].newMessage = todos[index].subject;
+      todos[index].newMessage = fullMessage(todos[index]);
     } else {
       todos[index].newMessage = undefined;
     }
@@ -224,13 +291,14 @@
           <div class="todo-content">
             <span class="todo-hash">{todo.hash.substring(0, 7)}</span>
             {#if todo.action === 'reword' || groupRole === 'squash-target'}
-              <input
+              <textarea
                 class="todo-message-input"
-                type="text"
+                rows="1"
                 placeholder={todo.action === 'reword' ? t('rebase.inlineDesc.reword') : t('rebase.inlineDesc.squash')}
                 use:tooltip={todo.subject}
+                use:autoresize
                 bind:value={todos[index].newMessage}
-              />
+              ></textarea>
             {:else}
               <span class="todo-subject truncate" class:dropped-text={todo.action === 'drop'} use:tooltip={todo.subject}>{todo.subject}</span>
               {#if todo.action !== 'pick'}
@@ -536,13 +604,18 @@
   .todo-message-input {
     flex: 1;
     min-width: 0;
-    padding: 1px 6px;
+    min-height: 28px;
+    max-height: 160px;
+    padding: 2px 6px;
     background: var(--vscode-input-background, var(--bg-secondary));
     border: 1px solid var(--vscode-input-border, var(--border-color));
     border-radius: 3px;
     color: var(--vscode-input-foreground, var(--text-primary));
     font-size: inherit;
     font-family: inherit;
+    line-height: 1.3;
+    resize: none;
+    overflow-y: auto;
     outline: none;
   }
 

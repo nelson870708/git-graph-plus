@@ -141,6 +141,55 @@ describe('InteractiveRebase — action changes', () => {
       expect(inputs.length).toBeGreaterThan(0);
     });
   });
+
+  it('pre-fills the full commit message (subject + body) when selecting reword on a commit with body', async () => {
+    const { container } = render(InteractiveRebase, baseProps);
+    deliverCommits([
+      commit({ hash: 'c1', subject: 'one', body: 'line two\nline three' }),
+      commit({ hash: 'c2', subject: 'two' }),
+    ]);
+    await waitFor(() => container.querySelector('.todo-item'));
+    const badges = container.querySelectorAll<HTMLButtonElement>('.action-badge');
+    await fireEvent.click(badges[0]);
+    const opts = container.querySelectorAll<HTMLButtonElement>('.action-option');
+    await fireEvent.click(Array.from(opts).find(o => o.textContent?.toLowerCase().includes('reword'))!);
+    await waitFor(() => {
+      const textarea = container.querySelector<HTMLTextAreaElement>('.todo-message-input');
+      expect(textarea).not.toBeNull();
+      expect(textarea!.value).toContain('line two');
+      expect(textarea!.value).toContain('line three');
+      expect(textarea!.value).toContain('one');
+    });
+  });
+
+  it('shows combined subject+body for squash-target, excluding fixup messages', async () => {
+    const { container } = render(InteractiveRebase, baseProps);
+    deliverCommits([
+      commit({ hash: 'a', subject: 'target', body: 'target body' }),
+      commit({ hash: 'b', subject: 'squash msg', body: 'squash body' }),
+      commit({ hash: 'c', subject: 'fixup msg', body: 'fixup body' }),
+    ]);
+    await waitFor(() => container.querySelector('.todo-item'));
+    const badges = container.querySelectorAll<HTMLButtonElement>('.action-badge');
+    // Squash commit b, fixup commit c
+    await fireEvent.click(badges[1]);
+    const squashOpts = container.querySelectorAll<HTMLButtonElement>('.action-option');
+    await fireEvent.click(Array.from(squashOpts).find(o => o.textContent?.toLowerCase().includes('squash'))!);
+    await fireEvent.click(badges[2]);
+    const fixupOpts = container.querySelectorAll<HTMLButtonElement>('.action-option');
+    await fireEvent.click(Array.from(fixupOpts).find(o => o.textContent?.toLowerCase().includes('fixup'))!);
+    await waitFor(() => {
+      const textarea = container.querySelector<HTMLTextAreaElement>('.todo-message-input');
+      expect(textarea).not.toBeNull();
+      expect(textarea!.value).toContain('target');
+      expect(textarea!.value).toContain('target body');
+      expect(textarea!.value).toContain('squash msg');
+      expect(textarea!.value).toContain('squash body');
+      // fixup messages should be excluded
+      expect(textarea!.value).not.toContain('fixup msg');
+      expect(textarea!.value).not.toContain('fixup body');
+    });
+  });
 });
 
 describe('InteractiveRebase — submit', () => {
