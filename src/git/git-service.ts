@@ -1223,13 +1223,15 @@ export class GitService {
   private shellEscapeForExec(s: string): string {
     return `'${s.replace(/'/g, "'\\''")}'`;
   }
-
-  private buildMFlags(parts: string[]): string {
-    return parts
-      .map(p => p.trim())
-      .filter(Boolean)
-      .map(p => `-m ${this.shellEscapeForExec(p)}`)
-      .join(' ');
+  /** Build amend command for interactive rebase exec lines.
+   *  Single-line → `git commit --amend --no-edit -m 'msg'`.
+   *  Multi-line → `printf '%s\n' ... | git commit --amend -F -` (POSIX, no temp files). */
+  private buildAmendCommand(message: string): string {
+    if (!message.includes('\n')) {
+      return `git commit --amend --no-edit -m ${this.shellEscapeForExec(message)}`;
+    }
+    const parts = message.split('\n').map(l => this.shellEscapeForExec(l));
+    return `printf '%s\\n' ${parts.join(' ')} | git commit --amend -F -`;
   }
 
   /**
@@ -1260,7 +1262,6 @@ export class GitService {
       );
     }
 
-    // Write todo list to a temp file (avoids shell injection)
     const isSquashLike = (a: string) => a === 'squash' || a === 'fixup';
     const lines: string[] = [];
     let i = 0;
@@ -1293,7 +1294,7 @@ export class GitService {
         // Without this, fixup-only groups would silently discard the user's edited message, and
         // squash groups would inherit git's default-editor combined message.
         if (finalMessage && (messageChanged || userWantsReword)) {
-          lines.push(`exec git commit --amend --no-edit ${this.buildMFlags([finalMessage])}`);
+          lines.push(`exec ${this.buildAmendCommand(finalMessage)}`);
         }
         continue;
       }
@@ -1303,12 +1304,11 @@ export class GitService {
         const msg = (todo.message ?? todo.subject).trim();
         lines.push(`pick ${todo.hash}`);
         if (msg) {
-          lines.push(`exec git commit --amend --no-edit ${this.buildMFlags([msg])}`);
+          lines.push(`exec ${this.buildAmendCommand(msg)}`);
         }
         i++;
         continue;
       }
-
       lines.push(`${todo.action} ${todo.hash}`);
       i++;
     }
@@ -1359,7 +1359,6 @@ export class GitService {
         });
       });
     } finally {
-      // Clean up temp file
       await unlink(todoFile).catch(() => {});
     }
   }
