@@ -96,6 +96,62 @@ describe('GitService integration — submodule', () => {
     // After update --init, the submodule is checked out again.
     expect(readdirSync(join(parent.path, 'libs', 'lib')).length).toBeGreaterThan(0);
   });
+
+  // Regression: in a submodule `.git` is a file pointing at the real gitdir,
+  // not a directory. Writing the rebase-todo into `<repo>/.git/...` or probing
+  // `<repo>/.git/rebase-merge` failed with ENOTDIR / missed the paused state.
+  describe('interactiveRebase', () => {
+    let subPath: string;
+    let subSvc: GitService;
+
+    beforeEach(() => {
+      subPath = join(parent.path, 'libs', 'lib');
+      subSvc = new GitService(subPath);
+      // The submodule *clone* inherits no identity, and GitService spawns git
+      // with the ambient environment — so a rebase that re-creates commits
+      // would fail with "Committer identity unknown" on a machine without a
+      // global git identity (e.g. CI). Configure it locally like createTempRepo.
+      runGit(subPath, ['config', 'user.name', 'Test User']);
+      runGit(subPath, ['config', 'user.email', 'test@example.com']);
+      runGit(subPath, ['config', 'commit.gpgsign', 'false']);
+    });
+
+    it('reorders commits in a submodule working tree', async () => {
+      const base = runGit(subPath, ['rev-parse', 'HEAD']).trim();
+      const c1 = commit(subPath, 'sub A', { 'a.txt': 'A\n' });
+      const c2 = commit(subPath, 'sub B', { 'b.txt': 'B\n' });
+
+      await subSvc.interactiveRebase(base, [
+        { action: 'pick', hash: c2, subject: 'sub B' },
+        { action: 'pick', hash: c1, subject: 'sub A' },
+      ]);
+
+      const subjects = runGit(subPath, ['log', '--format=%s', `${base}..HEAD`])
+        .trim().split('\n');
+      // git log is reverse-chrono, so newest first.
+      expect(subjects[0]).toBe('sub A');
+      expect(subjects[1]).toBe('sub B');
+    });
+
+    it('detects the paused rebase state when a submodule replay conflicts', async () => {
+      const base = runGit(subPath, ['rev-parse', 'HEAD']).trim();
+      // Two commits touching the same line; reordering them makes git stop with
+      // a conflict, leaving rebase-merge in the submodule's real gitdir.
+      writeFileSync(join(subPath, 'conflict.txt'), '1\n');
+      const c1 = commit(subPath, 'set to 2', { 'conflict.txt': '2\n' });
+      const c2 = commit(subPath, 'set to 3', { 'conflict.txt': '3\n' });
+
+      await expect(subSvc.interactiveRebase(base, [
+        { action: 'pick', hash: c2, subject: 'set to 3' },
+        { action: 'pick', hash: c1, subject: 'set to 2' },
+      ])).resolves.toBeUndefined();
+
+      expect((await subSvc.getOperationState()).type).toBe('rebase');
+
+      await subSvc.abortOperation();
+      expect((await subSvc.getOperationState()).type).toBeNull();
+    });
+  });
 });
 
 // LFS catch-path checks run regardless of whether git-lfs is installed —
