@@ -153,12 +153,12 @@
       },
       {
         "command": "gitGraphPlus.openWorktree",
-        "title": "Open Worktree",
+        "title": "%command.openWorktree%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "gitGraphPlus.openWorktreeInFileExplorer",
-        "title": "Open in File Explorer",
+        "title": "%command.openWorktreeInFileExplorer%",
         "icon": "$(folder-opened)"
       },
       {

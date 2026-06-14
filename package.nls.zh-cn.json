@@ -19,6 +19,8 @@
   "command.stashApply": "应用储藏",
   "command.stashPop": "应用并删除储藏",
   "command.stashDrop": "删除储藏",
+  "command.openWorktree": "打开工作树",
+  "command.openWorktreeInFileExplorer": "在文件资源管理器中打开",
   "command.removeWorktree": "移除工作树",
   "command.addWorktree": "添加工作树",
   "command.pruneWorktrees": "修剪工作树"
