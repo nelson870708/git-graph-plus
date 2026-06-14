@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.1 (2026-06-14)
+
+### New Features
+- **Worktree Open & Reveal** - Open a worktree in a new VS Code window (or just click it in the sidebar), and reveal it in the file explorer, from the Worktrees view's context menu.
+
+### Improvements
+- **Localized Worktree Commands** - The "Open Worktree" and "Open in File Explorer" actions are now translated for Korean and Chinese.
+- **Consistent Graph Fonts** - Unified the monospace and header fonts in the commit graph so the SHA column and column headers render consistently.
+
+### Bug Fixes
+- **Interactive Rebase in Submodules** - Interactive rebase no longer fails with an ENOTDIR error in submodules and linked worktrees, and the paused-state banner now appears correctly.
+- **Branch Badge Icons** - Only the current-branch check mark stays bold; the cloud and other badge icons now render at their normal weight.
+
 ## 0.5.0 (2026-06-10)
 
 ### New Features
