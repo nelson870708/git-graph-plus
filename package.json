@@ -2,7 +2,7 @@
   "name": "git-graph-plus",
   "displayName": "Git Graph Plus",
   "description": "A modern, full-featured Git GUI for VS Code",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "nelson870708",
   "repository": {
     "type": "git",
@@ -153,12 +153,12 @@
       },
       {
         "command": "gitGraphPlus.openWorktree",
-        "title": "Open Worktree",
+        "title": "%command.openWorktree%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "gitGraphPlus.openWorktreeInFileExplorer",
-        "title": "Open in File Explorer",
+        "title": "%command.openWorktreeInFileExplorer%",
         "icon": "$(folder-opened)"
       },
       {

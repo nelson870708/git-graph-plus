@@ -19,6 +19,8 @@
   "command.stashApply": "Apply Stash",
   "command.stashPop": "Pop Stash",
   "command.stashDrop": "Drop Stash",
+  "command.openWorktree": "Open Worktree",
+  "command.openWorktreeInFileExplorer": "Open in File Explorer",
   "command.removeWorktree": "Remove Worktree",
   "command.addWorktree": "Add Worktree",
   "command.pruneWorktrees": "Prune Worktrees"

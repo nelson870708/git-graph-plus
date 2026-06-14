@@ -19,6 +19,8 @@
   "command.stashApply": "Stash 적용",
   "command.stashPop": "Stash Pop",
   "command.stashDrop": "Stash 삭제",
+  "command.openWorktree": "Worktree 열기",
+  "command.openWorktreeInFileExplorer": "파일 탐색기에서 열기",
   "command.removeWorktree": "Worktree 제거",
   "command.addWorktree": "Worktree 추가",
   "command.pruneWorktrees": "Worktree 정리"
