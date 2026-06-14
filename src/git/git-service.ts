@@ -5,6 +5,7 @@ import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { bufferStream, BufferOverflowError } from '../utils/buffer-stream';
 import { getGitBinaryPath } from './git-binary';
+import { resolveGitDirs } from '../services/file-watcher-helpers';
 
 /** Default max bytes per stdout/stderr stream for a single git invocation.
  *  Picked to comfortably hold large log/diff output (e.g. `git log --all`
@@ -159,6 +160,14 @@ export class GitService {
   }
 
   get rootPath(): string { return this.repoPath; }
+
+  /**
+   * The real gitdir. In a submodule or linked worktree `.git` is a file
+   * pointing at it, so build gitdir paths from here, not by joining `'.git'`.
+   */
+  private gitDir(): string {
+    return resolveGitDirs(this.repoPath).gitDir;
+  }
 
   getActivityLog() {
     return this.activityLog;
@@ -1310,7 +1319,7 @@ export class GitService {
     }
 
     const todoContent = lines.join('\n') + '\n';
-    const todoFile = join(this.repoPath, '.git', `ghg-rebase-todo-${randomUUID()}`);
+    const todoFile = join(this.gitDir(), `ghg-rebase-todo-${randomUUID()}`);
 
     try {
       await writeFile(todoFile, todoContent, 'utf-8');
@@ -1343,7 +1352,7 @@ export class GitService {
           // remains on disk and the UI banner will guide the user to continue / abort.
           // Treat that as a successful "paused" outcome instead of throwing, which
           // would surface a redundant error dialog on top of the banner.
-          const gitDir = join(this.repoPath, '.git');
+          const gitDir = this.gitDir();
           const paused =
             existsSync(join(gitDir, 'rebase-merge')) ||
             existsSync(join(gitDir, 'rebase-apply'));
@@ -1441,7 +1450,7 @@ export class GitService {
     // Don't rely on REBASE_HEAD: git leaves it behind after `rebase --continue`
     // succeeds, which would falsely report a rebase as still in progress. The
     // canonical marker is the rebase state directory.
-    const gitDir = join(this.repoPath, '.git');
+    const gitDir = this.gitDir();
     if (existsSync(join(gitDir, 'rebase-merge')) || existsSync(join(gitDir, 'rebase-apply'))) {
       return { type: 'rebase' };
     }
