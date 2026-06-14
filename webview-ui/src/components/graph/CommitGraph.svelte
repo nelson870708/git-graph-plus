@@ -1854,7 +1854,10 @@
     font-weight: 600;
   }
 
-  .ref-badge.badge-head .ref-icon {
+  /* Only the current-branch check mark gets a heavier stroke for emphasis.
+     Other icons (cloud/worktree/tag/…) keep their normal weight — a text-stroke
+     on those glyphs reads as a rendering glitch rather than emphasis. */
+  .ref-badge.badge-head .ref-icon.codicon-check {
     -webkit-text-stroke: 1px currentColor;
   }
 
