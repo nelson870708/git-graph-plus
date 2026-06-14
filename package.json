@@ -3,10 +3,10 @@
   "displayName": "Git Graph Plus",
   "description": "A modern, full-featured Git GUI for VS Code",
   "version": "0.5.0",
-  "publisher": "the0807",
+  "publisher": "nelson870708",
   "repository": {
     "type": "git",
-    "url": "https://github.com/the0807/git-graph-plus"
+    "url": "https://github.com/nelson870708/git-graph-plus"
   },
   "license": "Apache-2.0",
   "icon": "resources/icon-marketplace.png",
