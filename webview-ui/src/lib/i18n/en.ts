@@ -155,6 +155,7 @@ export const en: Record<string, string> = {
   'graph.selectingCommits': 'Selecting commits…',
   'graph.newTag': 'New Tag',
   'graph.mergeInto': "Merge into '{branch}'",
+  'graph.createWorktree': 'New Worktree',
   'graph.rebaseTo': "Rebase '{branch}' to Here",
   'graph.interactiveRebaseTo': "Interactively Rebase '{branch}' to Here",
   'graph.resetBranchToHere': "Reset '{branch}' to Here",

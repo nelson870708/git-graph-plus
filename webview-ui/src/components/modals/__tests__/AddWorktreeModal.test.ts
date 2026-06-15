@@ -217,6 +217,33 @@ describe('AddWorktreeModal', () => {
     expect(onAdd).toHaveBeenCalledWith('/wt/develop', 'develop');
   });
 
+  it('opens in new-branch mode with the start point preselected', async () => {
+    setBranches([
+      { name: 'main', current: true, hash: 'abc', ahead: 0, behind: 0 },
+      { name: 'develop', current: false, hash: 'def', ahead: 0, behind: 0 },
+    ]);
+
+    const { container } = render(AddWorktreeModal, {
+      defaultPath: '/wt/',
+      startPoint: 'develop',
+      onClose: vi.fn(),
+      onAdd: vi.fn(),
+    });
+    await tick();
+    await tick();
+
+    // New-branch mode is active: the branch-name input is rendered.
+    const branchInput = container.querySelector<HTMLInputElement>('#wt-branch');
+    expect(branchInput).toBeTruthy();
+
+    // The "new" radio is selected.
+    const newRadio = container.querySelector<HTMLInputElement>('input[type="radio"][value="new"]')!;
+    expect(newRadio.checked).toBe(true);
+
+    // The start-at ColorSelect shows the preselected branch.
+    expect(container.querySelector('.color-select-btn')?.textContent).toContain('develop');
+  });
+
   it('filters branches that are already checked out in worktrees from existing branch mode', async () => {
     const onAdd = vi.fn();
     setBranches([

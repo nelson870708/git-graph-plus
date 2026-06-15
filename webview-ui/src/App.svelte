@@ -66,6 +66,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
   let deleteRemoteTagName = $state('');
   let showAddWorktreeModal = $state(false);
   let addWorktreeDefaultPath = $state('');
+  let addWorktreeStartPoint = $state<string | undefined>(undefined);
   let tagDetails = $state<{ name: string; hash: string; message?: string; isAnnotated: boolean } | null>(null);
 
   // Expose the branch-badge bar thickness globally so every badge surface
@@ -179,6 +180,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
             modalStore.openRemoveWorktree(msg.payload.path, msg.payload.branch);
           } else if (msg.payload.modal === 'addWorktree') {
             addWorktreeDefaultPath = msg.payload.defaultPath;
+            addWorktreeStartPoint = msg.payload.startPoint;
             showAddWorktreeModal = true;
           } else if (msg.payload.modal === 'fetch') {
             modalStore.openFetch();
@@ -645,6 +647,7 @@ import AmendModal from './components/modals/AmendModal.svelte';
 {#if showAddWorktreeModal}
   <AddWorktreeModal
     defaultPath={addWorktreeDefaultPath}
+    startPoint={addWorktreeStartPoint}
     onClose={() => { showAddWorktreeModal = false; }}
     onAdd={(path, branch, newBranch) => { showAddWorktreeModal = false; vscode.postMessage({ type: 'worktreeAdd', payload: { path, branch, newBranch } }); }}
   />

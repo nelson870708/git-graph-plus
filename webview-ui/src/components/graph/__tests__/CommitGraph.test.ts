@@ -158,6 +158,68 @@ describe('CommitGraph smoke', () => {
     modalStore.closeAmend();
   });
 
+  it('offers "Create worktree from" on a regular branch and posts startPoint', async () => {
+    const head = makeCommit('h1', 'first');
+    head.refs = [{ type: 'head', name: 'main' }];
+    const feat = makeCommit('h2', 'feat work', ['h1']);
+    feat.refs = [{ type: 'branch', name: 'develop' }];
+    commitStore.setData(makeGraphData([feat, head]));
+    branchStore.branches = [
+      { name: 'main', current: true, ahead: 0, behind: 0, hash: 'h1' },
+      { name: 'develop', current: false, ahead: 0, behind: 0, hash: 'h2' },
+    ];
+    const { container } = render(CommitGraph, {});
+    await tick();
+    globalThis.__postedMessages = [];
+    const row = container.querySelectorAll<HTMLElement>('.commit-row')[0]; // develop row
+    await fireEvent.contextMenu(row, { clientX: 10, clientY: 10 });
+    await tick();
+    // The branch "develop" is a submenu-parent; hover over it to reveal children.
+    const parentBtn = Array.from(container.querySelectorAll<HTMLElement>('button.menu-item.has-children'))
+      .find(el => (el.textContent ?? '').includes('develop'));
+    if (parentBtn) {
+      await fireEvent.mouseEnter(parentBtn);
+      await tick();
+    }
+    const item = Array.from(container.querySelectorAll<HTMLElement>('*'))
+      .find(el => el.children.length === 0 && /^new worktree$/i.test((el.textContent ?? '').trim()));
+    expect(item).toBeTruthy();
+    await fireEvent.click(item!);
+    await tick();
+    const msg = globalThis.__postedMessages
+      .map(m => m.data as { type?: string; payload?: { startPoint?: string } })
+      .find(m => m.type === 'worktreeAddModalRequest');
+    expect(msg?.payload?.startPoint).toBe('develop');
+  });
+
+  it('offers a top-level "Create worktree from" item (no submenu hover needed) and posts startPoint', async () => {
+    const head = makeCommit('h1', 'first');
+    head.refs = [{ type: 'head', name: 'main' }];
+    const feat = makeCommit('h2', 'feat work', ['h1']);
+    feat.refs = [{ type: 'branch', name: 'develop' }];
+    commitStore.setData(makeGraphData([feat, head]));
+    branchStore.branches = [
+      { name: 'main', current: true, ahead: 0, behind: 0, hash: 'h1' },
+      { name: 'develop', current: false, ahead: 0, behind: 0, hash: 'h2' },
+    ];
+    const { container } = render(CommitGraph, {});
+    await tick();
+    globalThis.__postedMessages = [];
+    const row = container.querySelectorAll<HTMLElement>('.commit-row')[0]; // develop row
+    await fireEvent.contextMenu(row, { clientX: 10, clientY: 10 });
+    await tick();
+    // Top-level (flat) item is present WITHOUT hovering into the branch submenu.
+    const item = Array.from(container.querySelectorAll<HTMLElement>('*'))
+      .find(el => el.children.length === 0 && /^new worktree$/i.test((el.textContent ?? '').trim()));
+    expect(item).toBeTruthy();
+    await fireEvent.click(item!);
+    await tick();
+    const msg = globalThis.__postedMessages
+      .map(m => m.data as { type?: string; payload?: { startPoint?: string } })
+      .find(m => m.type === 'worktreeAddModalRequest');
+    expect(msg?.payload?.startPoint).toBe('develop');
+  });
+
   it('does not crash on a branch-set fingerprint cache hit (same commits, same branch)', async () => {
     // First mount populates the cache.
     commitStore.setData(makeGraphData([

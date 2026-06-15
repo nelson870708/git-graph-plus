@@ -16,6 +16,7 @@ import {
   assertSafeArgPath as assertSafeArgPathUtil,
 } from '../utils/path-validation';
 import { SequenceGuard } from '../utils/sequence-guard';
+import { resolveDefaultWorktreePath } from '../utils/worktree-path';
 
 export class MainPanel {
   public static currentPanel: MainPanel | undefined;
@@ -851,6 +852,11 @@ export class MainPanel {
         case 'stashRename': {
           await this.gitService.stashRename(message.payload.index, message.payload.message);
           await this.refreshAll();
+          break;
+        }
+        case 'worktreeAddModalRequest': {
+          const defaultPath = await resolveDefaultWorktreePath(this.gitService, this.gitService.rootPath);
+          this.postShowModal({ modal: 'addWorktree', defaultPath, startPoint: message.payload.startPoint });
           break;
         }
         case 'worktreeAdd': {

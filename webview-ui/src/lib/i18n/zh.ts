@@ -155,6 +155,7 @@ export const zh: Record<string, string> = {
   'graph.selectingCommits': '正在选择提交…',
   'graph.newTag': '新建标签',
   'graph.mergeInto': "合并到 '{branch}'",
+  'graph.createWorktree': '新建工作树',
   'graph.rebaseTo': "将 '{branch}' 变基到此处",
   'graph.interactiveRebaseTo': "将 '{branch}' 交互式变基到此处",
   'graph.resetBranchToHere': "将 '{branch}' 重置到此处",

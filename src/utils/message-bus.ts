@@ -61,6 +61,7 @@ export type WebviewMessage =
   | { type: 'stashDrop'; payload: { index: number } }
   | { type: 'stashRename'; payload: { index: number; message: string } }
   | { type: 'worktreeAdd'; payload: { path: string; branch?: string; newBranch?: string } }
+  | { type: 'worktreeAddModalRequest'; payload: { startPoint?: string } }
   | { type: 'worktreeRemove'; payload: { path: string; deleteBranch?: string } }
   | { type: 'createTag'; payload: { name: string; ref?: string; message?: string } }
   | { type: 'deleteTag'; payload: { name: string } }
@@ -159,5 +160,5 @@ export type ExtensionMessage =
     | { modal: 'deleteRemoteTag'; tagName: string }
     | { modal: 'removeWorktree'; path: string; branch: string }
     | { modal: 'deleteRemoteBranch'; remote: string; name: string }
-    | { modal: 'addWorktree'; defaultPath: string }
+    | { modal: 'addWorktree'; defaultPath: string; startPoint?: string }
   };

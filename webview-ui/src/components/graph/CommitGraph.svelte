@@ -620,6 +620,10 @@
                 label: t('sidebar.checkout'),
                 action: () => doCheckout(branchName),
               },
+              {
+                label: t('graph.createWorktree'),
+                action: () => vscode.postMessage({ type: 'worktreeAddModalRequest', payload: { startPoint: branchName } }),
+              },
               ...(branchName !== currentBranch ? [{
                 label: t('graph.mergeInto', { branch: currentBranch }),
                 action: () => { modalStore.openMerge(branchName, branchStore.currentBranch?.name ?? 'current branch'); },
@@ -750,10 +754,18 @@
 
     if (!isStashCommit) {
       // ── Create ──
-      groups.push([
+      const createGroup: any[] = [
         { label: t('graph.createBranchHere'), action: () => { modalStore.openCreateBranch(commit.hash, commit.subject); } },
         { label: t('graph.newTag'),           action: () => { modalStore.openCreateTag(commit.hash, commit.subject); } },
-      ]);
+      ];
+      const worktreeStartRef = commit.refs.find(r => r.type === 'head' || r.type === 'branch');
+      if (worktreeStartRef) {
+        createGroup.push({
+          label: t('graph.createWorktree'),
+          action: () => vscode.postMessage({ type: 'worktreeAddModalRequest', payload: { startPoint: worktreeStartRef.name } }),
+        });
+      }
+      groups.push(createGroup);
 
       // ── Branch / tag operations (merge, rebase, interactive rebase) ──
       const branchOps: any[] = [];

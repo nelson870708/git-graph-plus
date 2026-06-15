@@ -155,6 +155,7 @@ export const ko: Record<string, string> = {
   'graph.selectingCommits': '커밋 선택 중…',
   'graph.newTag': '새 태그 생성',
   'graph.mergeInto': "'{branch}'에 Merge",
+  'graph.createWorktree': '새 워크트리 생성',
   'graph.rebaseTo': "'{branch}'을(를) 여기로 Rebase",
   'graph.interactiveRebaseTo': "'{branch}'을(를) 여기로 Interactive Rebase",
   'graph.resetBranchToHere': "'{branch}'을(를) 여기로 Reset",

@@ -8,13 +8,14 @@
 
   interface Props {
     defaultPath?: string;
+    startPoint?: string;
     onClose: () => void;
     onAdd: (path: string, branch?: string, newBranch?: string) => void;
   }
 
   type WorktreeMode = 'existing' | 'new';
 
-  let { defaultPath = '', onClose, onAdd }: Props = $props();
+  let { defaultPath = '', startPoint, onClose, onAdd }: Props = $props();
 
   const localBranches = $derived(branchStore.localBranches.map(b => b.name));
   const checkedOutBranches = $derived(new Set(branchStore.worktrees.map(w => w.branch).filter(Boolean)));
@@ -22,8 +23,9 @@
   const startAtOptions = $derived(localBranches.length > 0 ? localBranches : ['HEAD']);
   let existingBranch = $state('');
   // svelte-ignore state_referenced_locally
-  let startAt = $state(branchStore.currentBranch?.name ?? 'HEAD');
-  let mode = $state<WorktreeMode>('existing');
+  let startAt = $state(startPoint ?? branchStore.currentBranch?.name ?? 'HEAD');
+  // svelte-ignore state_referenced_locally
+  let mode = $state<WorktreeMode>(startPoint ? 'new' : 'existing');
   let branchName = $state('');
   // svelte-ignore state_referenced_locally
   let location = $state(defaultPath);

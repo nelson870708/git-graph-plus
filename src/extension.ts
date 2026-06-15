@@ -14,6 +14,7 @@ import { WorktreesViewProvider } from './views/worktrees-view';
 import { StatusBarManager } from './views/status-bar';
 import { RepoDiscoveryService } from './services/repo-discovery';
 import { samePath } from './utils/path';
+import { resolveDefaultWorktreePath } from './utils/worktree-path';
 
 /**
  * Resolve the `git.path` setting to an existing executable. The setting may be
@@ -477,16 +478,7 @@ export function activate(context: vscode.ExtensionContext) {
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'stashDrop', index, message: stashItem?.stash?.message ?? `stash@{${index}}` });
     }),
     vscode.commands.registerCommand('gitGraphPlus.addWorktree', async () => {
-      let baseRepoPath = activeRepoPath;
-      try {
-        const mainWorktree = (await activeGitService.worktreeList()).find(w => w.isMain);
-        if (mainWorktree?.path) {
-          baseRepoPath = mainWorktree.path;
-        }
-      } catch (err) {
-        console.warn('Git Graph+: failed to resolve main worktree path:', err instanceof Error ? err.message : err);
-      }
-      const defaultPath = path.join(path.dirname(baseRepoPath), `${path.basename(baseRepoPath)}.worktrees`);
+      const defaultPath = await resolveDefaultWorktreePath(activeGitService, activeRepoPath);
       MainPanel.showModalWithPanel(context.extensionUri, { modal: 'addWorktree', defaultPath });
     }),
     vscode.commands.registerCommand('gitGraphPlus.pruneWorktrees', () => {
