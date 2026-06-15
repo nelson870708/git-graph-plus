@@ -111,7 +111,7 @@ A modern, full-featured Git GUI for VS Code. Visualize your commit history, mana
 | ------------------ | -------------------------------------------------------------------------------- |
 | **Stash**          | Save, apply, pop, drop, and rename - with untracked files and keep-index options |
 | **Stash in Graph** | Stash entries appear as badges in the commit graph with dedicated context menu   |
-| **Worktree**       | List, add, remove, and prune worktrees, open them in a new window or reveal in the file explorer, with linked branch cleanup |
+| **Worktree**       | List, add, remove, and prune worktrees, create one straight from the commit graph context menu, open them in a new window or reveal in the file explorer, with linked branch cleanup |
 
 ### Advanced Tools
 

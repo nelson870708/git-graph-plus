@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 (2026-06-15)
+
+### New Features
+- **New Worktree from the Graph** - Create a worktree straight from the commit graph: a "New Worktree" entry on a branch's context menu and in the commit's "Create" group opens the Add Worktree dialog with the picked branch pre-filled as the start point (which you can still change before confirming).
+- **Worktree from an Existing Branch** - When adding a worktree you can now check out an existing branch instead of always creating a new one. Branches already checked out in another worktree are filtered out, and default worktree paths are cleaner.
+
 ## 0.5.1 (2026-06-14)
 
 ### New Features
