@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLog, parseRefs, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks, splitUpstreamRef } from '../git-parser';
+import { parseLog, parseRefs, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks, splitUpstreamRef, mapSignatureStatus } from '../git-parser';
 
 
 describe('parseLog', () => {
@@ -50,6 +50,52 @@ describe('parseLog', () => {
     expect(result[0].refs[0]).toEqual({ type: 'head', name: 'main' });
     expect(result[0].refs[1]).toEqual({ type: 'remote-branch', name: 'main', remote: 'origin' });
     expect(result[0].refs[2]).toEqual({ type: 'tag', name: 'v1.0' });
+  });
+
+  it('should leave signatureStatus undefined when the signature column is absent', () => {
+    const raw = '\x01\x02\x03abc123\x00abc\x00Alice\x00a@x.com\x002024-01-01\x00Alice\x00a@x.com\x002024-01-01\x00Commit\x00\x00\x00body text';
+    const result = parseLog(raw);
+    expect(result[0].signatureStatus).toBeUndefined();
+  });
+
+  it('should parse signatureStatus from the appended %G? column', () => {
+    // ...subject\x00parents\x00refs\x00body\x00<code>
+    const make = (code: string) =>
+      `\x01\x02\x03abc123\x00abc\x00Alice\x00a@x.com\x002024-01-01\x00Alice\x00a@x.com\x002024-01-01\x00Commit\x00\x00\x00\x00${code}`;
+    expect(parseLog(make('G'))[0].signatureStatus).toBe('good');
+    expect(parseLog(make('N'))[0].signatureStatus).toBe('none');
+    expect(parseLog(make('U'))[0].signatureStatus).toBe('unverified');
+    expect(parseLog(make('B'))[0].signatureStatus).toBe('unverified');
+  });
+
+  it('should still parse signatureStatus when the body is non-empty', () => {
+    const raw = '\x01\x02\x03abc123\x00abc\x00Alice\x00a@x.com\x002024-01-01\x00Alice\x00a@x.com\x002024-01-01\x00Commit\x00\x00\x00multi\nline body\x00G';
+    const result = parseLog(raw);
+    expect(result[0].body).toBe('multi\nline body');
+    expect(result[0].signatureStatus).toBe('good');
+  });
+});
+
+describe('mapSignatureStatus', () => {
+  it('maps G to good and N to none', () => {
+    expect(mapSignatureStatus('G')).toBe('good');
+    expect(mapSignatureStatus('N')).toBe('none');
+  });
+
+  it('maps every other verification code to unverified', () => {
+    for (const code of ['B', 'U', 'X', 'Y', 'R', 'E']) {
+      expect(mapSignatureStatus(code)).toBe('unverified');
+    }
+  });
+
+  it('trims whitespace (the column may carry a trailing newline)', () => {
+    expect(mapSignatureStatus('G\n')).toBe('good');
+    expect(mapSignatureStatus(' N ')).toBe('none');
+  });
+
+  it('returns undefined for an empty code', () => {
+    expect(mapSignatureStatus('')).toBeUndefined();
+    expect(mapSignatureStatus('   ')).toBeUndefined();
   });
 });
 

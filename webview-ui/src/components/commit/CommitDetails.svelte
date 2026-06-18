@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Commit, DiffData } from '../../lib/types';
+  import type { Commit, DiffData, CommitSignature } from '../../lib/types';
   import { getVsCodeApi } from '../../lib/vscode-api';
   import { branchStore } from '../../lib/stores/branches.svelte';
   import { uiStore } from '../../lib/stores/ui.svelte';
@@ -36,6 +36,32 @@
   let uncommittedDiffCache = $state(new Map<string, DiffData>());
   let lfsFiles = $state<Array<{ oid: string; path: string }>>([]);
   let lfsLocks = $state<Array<{ path: string; owner: string; id: string }>>([]);
+  // On-demand signature for the selected commit, fetched independently of the
+  // graph-wide setting so the panel always shows verification status.
+  let signature = $state<CommitSignature | null>(null);
+
+  // Build a "Name <email>" display for the *verified* signer. git's %GS varies
+  // by format: GPG often yields "Name <email>", SSH yields just the principal
+  // email. Only a "good" signature has a verified identity, so we only enrich
+  // from the committer in that case. For unverified signatures git could not
+  // confirm who signed it (%GS is usually empty), so we must NOT fabricate an
+  // identity from the committer — we just show whatever %GS actually returned.
+  function signerDisplay(): string {
+    const s = signature?.signer?.trim() ?? '';
+    if (signature?.status !== 'good') return s;
+    if (s.includes('<') && s.includes('>')) return s;
+    if (s.includes('@')) {
+      const name = commit?.committer?.name ?? commit?.author?.name ?? '';
+      return name ? `${name} <${s}>` : s;
+    }
+    if (s) {
+      const email = commit?.committer?.email ?? commit?.author?.email ?? '';
+      return email ? `${s} <${email}>` : s;
+    }
+    const name = commit?.committer?.name ?? '';
+    const email = commit?.committer?.email ?? '';
+    return (name || email) ? `${name} <${email}>`.trim() : '';
+  }
   let fileContextMenu = $state<{ x: number; y: number; items: any[] } | null>(null);
   let previewCommit = $state<Commit | null>(null);
   let previewPos = $state<{ x: number; y: number } | null>(null);
@@ -147,12 +173,14 @@
       selectedPatchFiles = new Set();
       uncommittedFiles = null;
       uncommittedDiffCache = new Map();
+      signature = null;
       if (hash === 'UNCOMMITTED') {
         activeTab = 'changes';
         vscode.postMessage({ type: 'getUncommittedDiff' });
       } else if (hash) {
         vscode.postMessage({ type: 'getCommitDiff', payload: { hash } });
         vscode.postMessage({ type: 'getLfsFiles' });
+        vscode.postMessage({ type: 'getCommitSignature', payload: { hash } });
       }
     }
   });
@@ -245,6 +273,11 @@
       if (msg.type === 'lfsData') {
         lfsFiles = msg.payload.files;
         lfsLocks = msg.payload.locks;
+      }
+      if (msg.type === 'commitSignatureData') {
+        // Discard stale responses from previous commit selections.
+        if (msg.payload.hash !== activeHash) return;
+        signature = msg.payload.signature;
       }
       if (msg.type === 'commitData') {
         const c = msg.payload.commit;
@@ -476,6 +509,12 @@
                 <div class="person-name">
                   {commit.author.name}
                   <span class="person-email">&lt;{commit.author.email}&gt;</span>
+                  {#if signature && signature.status !== 'none'}
+                    <i
+                      class="codicon codicon-{signature.status === 'good' ? 'pass' : 'question'} sig-glyph sig-glyph-{signature.status}"
+                      use:tooltip={signature.status === 'good' ? t('signature.verified') : t('signature.unverified')}
+                    ></i>
+                  {/if}
                 </div>
                 <div class="person-date">{formatFullDate(commit.author.date)}</div>
               </div>
@@ -562,6 +601,19 @@
               </div>
             </span>
           </div>
+          {#if signature && signature.status !== 'none'}
+            {@const who = signerDisplay()}
+            {#if who || signature.keyId}
+              <div class="meta-row">
+                <span class="meta-label">{t('details.signature')}</span>
+                <span class="meta-value sig-value">
+                  <span class="sig-detail">
+                    {#if who}{who}{/if}{#if signature.keyId}{@const keyLabel = signature.keyId.startsWith('SHA256:') ? 'SSH Key' : 'GPG Key ID'}{#if who}{' '}{/if}({keyLabel}: <span class="mono">{signature.keyId}</span>){/if}
+                  </span>
+                </span>
+              </div>
+            {/if}
+          {/if}
           {#if commit.parents.length > 0}
             <div class="meta-row">
               <span class="meta-label">{t('details.parents')}</span>
@@ -1129,6 +1181,31 @@
 
   .mono {
     font-family: var(--vscode-editor-font-family, monospace);
+  }
+
+  .sig-value {
+    gap: 8px;
+  }
+
+  .sig-detail {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+  }
+
+  /* Inline status glyph shown right after the author email. The single space
+     between the email span and this icon comes from the markup whitespace, so
+     no extra left margin (which would read as a double space). */
+  .sig-glyph {
+    font-size: 0.95em;
+    vertical-align: middle;
+  }
+
+  .sig-glyph-good {
+    color: var(--vscode-testing-iconPassed, #4caf50);
+  }
+
+  .sig-glyph-unverified {
+    color: var(--vscode-editorWarning-foreground, #d7a000);
   }
 
   .copy-btns {

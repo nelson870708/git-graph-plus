@@ -1,4 +1,4 @@
-import type { CommitGraphData, BranchData, DiffData, Commit, WorktreeInfo } from '../git/types';
+import type { CommitGraphData, BranchData, DiffData, Commit, WorktreeInfo, CommitSignature } from '../git/types';
 
 export interface ModalDefaults {
   push: { force: 'none' | 'with-lease' | 'force'; setUpstream: boolean; allTags: boolean };
@@ -31,6 +31,7 @@ export type WebviewMessage =
   | { type: 'getCommitDiff'; payload: { hash: string } }
   | { type: 'getFileDiff'; payload: { hash: string; file: string } }
   | { type: 'getCommitData'; payload: { hash: string } }
+  | { type: 'getCommitSignature'; payload: { hash: string } }
   | { type: 'createBranch'; payload: { name: string; startPoint?: string; checkout?: boolean; publish?: boolean; stash?: boolean; stashUntracked?: boolean; force?: boolean; clean?: boolean; merge?: boolean } }
   | { type: 'deleteBranch'; payload: { name: string; force?: boolean; worktreePath?: string; deleteRemote?: boolean } }
   | { type: 'deleteRemoteBranch'; payload: { remote: string; name: string } }
@@ -117,6 +118,7 @@ export type ExtensionMessage =
   | { type: 'branchData'; payload: BranchData }
   | { type: 'fullRefresh'; payload: { logData: CommitGraphData; branchData: BranchData } }
   | { type: 'commitDiffData'; payload: { hash?: string; diffs?: DiffData[]; files: Array<{ path: string; status: string }> } }
+  | { type: 'commitSignatureData'; payload: { hash: string; signature: CommitSignature } }
   | { type: 'rebaseCommitsData'; payload: { base: string; commits: Commit[] } }
   | { type: 'searchResults'; payload: CommitGraphData }
   | { type: 'activityLogData'; payload: Array<{ command: string; timestamp: string; success: boolean; duration: number }> }

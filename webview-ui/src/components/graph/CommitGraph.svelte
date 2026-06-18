@@ -990,10 +990,18 @@
     <!-- Author / hash / date cells, shared by the in-row meta (normal mode) and the
          pinned overlay (horizontal-scroll mode). -->
     {#snippet metaCells(commit: typeof displayCommits[0])}
-      <div class="col-author" use:tooltip={commit.author.name}>
+      <div class="col-author">
         {#if commit.hash !== 'UNCOMMITTED'}
-          <img class="avatar-sm" src={getGravatarUrl(commit.author.email, 20)} alt="" loading="lazy" />
-          <span class="author-name truncate">{commit.author.name}</span>
+          <span class="author-id" use:tooltip={commit.author.name}>
+            <img class="avatar-sm" src={getGravatarUrl(commit.author.email, 20)} alt="" loading="lazy" />
+            <span class="author-name truncate">{commit.author.name}</span>
+          </span>
+          {#if commit.signatureStatus && commit.signatureStatus !== 'none'}
+            <i
+              class="codicon codicon-{commit.signatureStatus === 'good' ? 'pass' : 'question'} sig-icon sig-icon-{commit.signatureStatus}"
+              use:tooltip={commit.signatureStatus === 'good' ? t('signature.verified') : t('signature.unverified')}
+            ></i>
+          {/if}
         {/if}
       </div>
       <div class="col-hash" use:tooltip={commit.hash !== 'UNCOMMITTED' ? commit.hash : ''}>{commit.hash !== 'UNCOMMITTED' ? commit.abbreviatedHash : ''}</div>
@@ -1759,6 +1767,17 @@
     gap: 4px;
   }
 
+  /* Wraps avatar + name so the author-name tooltip is scoped to them only;
+     the signature icon sits outside as a sibling so hovering it doesn't also
+     trigger this tooltip (which would overlap two tooltips). min-width:0 lets
+     the name truncate while the icon (flex-shrink:0) stays visible. */
+  .author-id {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+  }
+
   .avatar-sm {
     width: 18px;
     height: 18px;
@@ -1807,6 +1826,23 @@
   .commit-subject {
     flex: 1;
     min-width: 0;
+  }
+
+  /* Signature status icon, shown right after the author name (with the
+     col-author flex gap as the single space) only when the graph is fetched
+     with verification on (gitGraphPlus.showSignatureStatus). */
+  .sig-icon {
+    flex-shrink: 0;
+    font-size: 0.95em;
+    vertical-align: middle;
+  }
+
+  .sig-icon-good {
+    color: var(--vscode-testing-iconPassed, #4caf50);
+  }
+
+  .sig-icon-unverified {
+    color: var(--vscode-editorWarning-foreground, #d7a000);
   }
 
   /* ---- Ref badges ----

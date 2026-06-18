@@ -1,4 +1,19 @@
-import type { Commit, Ref, BranchInfo, TagInfo, RemoteInfo, StashEntry, DiffData, DiffHunk, DiffLine, WorktreeInfo } from './types';
+import type { Commit, Ref, SignatureStatus, BranchInfo, TagInfo, RemoteInfo, StashEntry, DiffData, DiffHunk, DiffLine, WorktreeInfo } from './types';
+
+/** Map git's `%G?` signature verification code to our 3-state enum.
+ *  `G` = valid signature → good; `N` = no signature → none; everything else
+ *  (`B` bad, `U` unknown validity, `X` expired sig, `Y` expired key, `R`
+ *  revoked key, `E` cannot check) collapses to unverified. Returns undefined
+ *  for an empty code (signature column not requested). */
+export function mapSignatureStatus(code: string): SignatureStatus | undefined {
+  const c = code.trim();
+  if (!c) return undefined;
+  switch (c) {
+    case 'G': return 'good';
+    case 'N': return 'none';
+    default: return 'unverified';
+  }
+}
 
 // 3-byte sentinel for record boundaries. A single \x01 can be embedded in
 // commit subjects/bodies and tag messages by any contributor (`git commit -m`
@@ -32,11 +47,15 @@ function parseCommitRecord(record: string, remoteNames?: string[]): Commit {
   const parentStr = fields[9] ?? '';
   const refStr = fields[10]?.trim() ?? '';
   const body = (fields[11] ?? '').trim();
+  // Appended after %b only when the log was fetched with signature verification;
+  // absent (undefined) otherwise. Body never contains a NUL, so this column stays
+  // unambiguous even for multi-line bodies.
+  const signatureCode = fields[12];
 
   const parents = parentStr.trim() ? parentStr.trim().split(' ') : [];
   const refs = refStr ? parseRefs(refStr, remoteNames) : [];
 
-  return {
+  const commit: Commit = {
     hash,
     abbreviatedHash,
     author: { name: authorName, email: authorEmail, date: authorDate },
@@ -46,6 +65,13 @@ function parseCommitRecord(record: string, remoteNames?: string[]): Commit {
     parents,
     refs,
   };
+
+  if (signatureCode !== undefined) {
+    const status = mapSignatureStatus(signatureCode);
+    if (status) commit.signatureStatus = status;
+  }
+
+  return commit;
 }
 
 /** Split an upstream ref like "origin/feature/x" into its remote and branch.

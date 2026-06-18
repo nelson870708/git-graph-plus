@@ -44,6 +44,12 @@ function deliverLfs(files: Array<{ oid: string; path: string }>, locks: Array<{ 
   }));
 }
 
+function deliverSignature(hash: string, signature: { status: 'good' | 'none' | 'unverified'; signer?: string; keyId?: string }) {
+  window.dispatchEvent(new MessageEvent('message', {
+    data: { type: 'commitSignatureData', payload: { hash, signature } },
+  }));
+}
+
 beforeEach(() => {
   i18n.setLocale('en');
   globalThis.__postedMessages = [];
@@ -79,6 +85,83 @@ describe('CommitDetails — request flow', () => {
         (m) => (m.data as { type?: string }).type === 'getUncommittedDiff'
       )).toBe(true);
     });
+  });
+
+  it('posts getCommitSignature when a real commit is mounted', async () => {
+    render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    await waitFor(() => {
+      const req = globalThis.__postedMessages.find(
+        (m) => (m.data as { type?: string }).type === 'getCommitSignature'
+      );
+      expect(req).toBeTruthy();
+      expect((req!.data as { payload: { hash: string } }).payload.hash).toBe('h1');
+    });
+  });
+
+  it('does not post getCommitSignature for UNCOMMITTED', async () => {
+    render(CommitDetails, { commit: commit({ hash: 'UNCOMMITTED' }) });
+    await waitFor(() => {
+      expect(globalThis.__postedMessages.some(
+        (m) => (m.data as { type?: string }).type === 'getUncommittedDiff'
+      )).toBe(true);
+    });
+    expect(globalThis.__postedMessages.some(
+      (m) => (m.data as { type?: string }).type === 'getCommitSignature'
+    )).toBe(false);
+  });
+});
+
+describe('CommitDetails — signature', () => {
+  it('shows the verified signer (enriched with the committer name) and key ID', async () => {
+    const { container } = render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    await waitFor(() => container.querySelector('.person-name'));
+    deliverSignature('h1', { status: 'good', signer: 'Alice', keyId: 'ABCD1234' });
+    await waitFor(() => expect(container.querySelector('.sig-detail')).toBeTruthy());
+    const text = container.querySelector('.sig-detail')?.textContent ?? '';
+    expect(text).toContain('Alice <a@x.com>');
+    expect(text).toContain('GPG Key ID: ABCD1234');
+    // The status glyph next to the email reflects the good status.
+    expect(container.querySelector('.sig-glyph.sig-glyph-good')).toBeTruthy();
+  });
+
+  it('labels an SSH key fingerprint as "SSH Key" instead of "GPG Key ID"', async () => {
+    const { container } = render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    await waitFor(() => container.querySelector('.person-name'));
+    deliverSignature('h1', { status: 'good', signer: 'a@x.com', keyId: 'SHA256:AbCdEf' });
+    await waitFor(() => expect(container.querySelector('.sig-detail')).toBeTruthy());
+    const text = container.querySelector('.sig-detail')?.textContent ?? '';
+    expect(text).toContain('SSH Key: SHA256:AbCdEf');
+    expect(text).not.toContain('GPG Key ID');
+  });
+
+  it('does not fabricate a signer from the committer for an unverified signature', async () => {
+    const { container } = render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    await waitFor(() => container.querySelector('.person-name'));
+    // git returns no %GS for an untrusted key — must not claim "Signed by <committer>".
+    deliverSignature('h1', { status: 'unverified', keyId: 'SHA256:UnTrust' });
+    await waitFor(() => expect(container.querySelector('.sig-detail')).toBeTruthy());
+    const text = container.querySelector('.sig-detail')?.textContent ?? '';
+    expect(text).not.toContain('Signed by');
+    expect(text).toContain('SSH Key: SHA256:UnTrust');
+    expect(container.querySelector('.sig-glyph.sig-glyph-unverified')).toBeTruthy();
+  });
+
+  it('shows no signature row or glyph for an unsigned commit', async () => {
+    const { container } = render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    await waitFor(() => container.querySelector('.person-name'));
+    deliverSignature('h1', { status: 'none' });
+    await Promise.resolve();
+    expect(container.querySelector('.sig-detail')).toBeFalsy();
+    expect(container.querySelector('.sig-glyph')).toBeFalsy();
+  });
+
+  it('ignores a stale signature response for a different commit', async () => {
+    const { container } = render(CommitDetails, { commit: commit({ hash: 'h1' }) });
+    await waitFor(() => container.querySelector('.person-name'));
+    deliverSignature('other-hash', { status: 'good', signer: 'Mallory' });
+    await Promise.resolve();
+    expect(container.querySelector('.sig-detail')).toBeFalsy();
+    expect(container.querySelector('.sig-glyph')).toBeFalsy();
   });
 });
 

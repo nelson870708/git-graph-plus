@@ -7,6 +7,20 @@ export interface Commit {
   body: string;
   parents: string[];
   refs: Ref[];
+  /** GPG/SSH signature verification status. Present only when the log was
+   *  fetched with signature verification enabled (the graph setting); absent
+   *  otherwise so the graph icon stays hidden and there is no perf cost. */
+  signatureStatus?: SignatureStatus;
+}
+
+/** Simplified 3-state mapping of git's `%G?` verification codes. */
+export type SignatureStatus = 'good' | 'none' | 'unverified';
+
+/** On-demand signature details for a single commit (Details panel). */
+export interface CommitSignature {
+  status: SignatureStatus;
+  signer?: string;
+  keyId?: string;
 }
 
 export interface PersonInfo {
@@ -153,4 +167,8 @@ export interface LogOptions {
   skip?: number;
   sortOrder?: 'author-date' | 'date' | 'topological';
   remoteFilter?: string[]; // undefined = all; ['local'] = local only; ['origin'] = origin only; etc.
+  /** When true, include `%G?` in the log format so each commit carries a
+   *  signatureStatus. Off by default — it forces GPG verification of every
+   *  commit in the log, which is slow on large repos. */
+  includeSignature?: boolean;
 }

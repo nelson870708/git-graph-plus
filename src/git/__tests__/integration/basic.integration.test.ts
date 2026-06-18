@@ -558,4 +558,28 @@ describe('GitService integration — basic queries', () => {
       expect(src?.type).toBe('tree');
     });
   });
+
+  describe('signature status', () => {
+    // Generating a real GPG/SSH key in CI is impractical, so these cover the
+    // unsigned ("none") path against real git; the G/unverified mapping is
+    // exercised by the git-parser unit tests.
+    it('getCommitSignature reports "none" for an unsigned commit', async () => {
+      const tip = commit(repo.path, 'unsigned', { 'a.txt': '1\n' });
+      const sig = await svc.getCommitSignature(tip);
+      expect(sig.status).toBe('none');
+    });
+
+    it('log without includeSignature omits signatureStatus', async () => {
+      commit(repo.path, 'c', { 'a.txt': '1\n' });
+      const commits = await svc.log();
+      expect(commits[0].signatureStatus).toBeUndefined();
+    });
+
+    it('log with includeSignature populates "none" for unsigned commits', async () => {
+      commit(repo.path, 'c', { 'a.txt': '1\n' });
+      const commits = await svc.log({ includeSignature: true });
+      const real = commits.find(c => c.hash !== 'UNCOMMITTED');
+      expect(real?.signatureStatus).toBe('none');
+    });
+  });
 });

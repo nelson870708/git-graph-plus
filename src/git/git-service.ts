@@ -13,8 +13,8 @@ import { resolveGitDirs } from '../services/file-watcher-helpers';
  *  preventing a pathological --no-pager binary blob from eating the whole
  *  extension host. Callers can override per-invocation via `maxBufferBytes`. */
 const DEFAULT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
-import { parseLog, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks } from './git-parser';
-import type { Commit, BranchInfo, TagInfo, RemoteInfo, StashEntry, LogOptions, DiffData, WorktreeInfo } from './types';
+import { parseLog, parseBranches, parseTags, parseRemotes, parseStashList, parseDiff, parseWorktreeList, parseLfsFiles, parseLfsLocks, mapSignatureStatus } from './git-parser';
+import type { Commit, BranchInfo, TagInfo, RemoteInfo, StashEntry, LogOptions, DiffData, WorktreeInfo, CommitSignature } from './types';
 
 export class GitError extends Error {
   constructor(
@@ -247,6 +247,32 @@ export class GitService {
     }
   }
 
+  /**
+   * Verify a single commit's signature on demand (for the Commit Details
+   * panel). Unlike the graph-wide setting, this only verifies one commit so it
+   * is cheap regardless of repo size. Failures degrade to "no signature" rather
+   * than throwing, so the panel never breaks on an unverifiable commit.
+   */
+  async getCommitSignature(hash: string): Promise<CommitSignature> {
+    this.assertSafeRef(hash, 'getCommitSignature');
+    try {
+      const out = await this.exec(
+        ['show', '--no-patch', '--format=%G?%x00%GS%x00%GK', hash],
+        { silent: true },
+      );
+      const [code = '', signer = '', keyId = ''] = out.split('\x00');
+      const sig: CommitSignature = { status: mapSignatureStatus(code) ?? 'none' };
+      const signerTrimmed = signer.trim();
+      const keyIdTrimmed = keyId.trim();
+      if (signerTrimmed) sig.signer = signerTrimmed;
+      if (keyIdTrimmed) sig.keyId = keyIdTrimmed;
+      return sig;
+    } catch (err) {
+      this.warn(`failed to get commit signature: ${err instanceof Error ? err.message : err}`);
+      return { status: 'none' };
+    }
+  }
+
   private exec(args: string[], options?: { stdin?: string; timeout?: number; silent?: boolean; maxBufferBytes?: number }): Promise<string> {
     const startTime = Date.now();
     const command = `git ${args.join(' ')}`;
@@ -335,9 +361,14 @@ export class GitService {
   }
 
   async log(options?: LogOptions): Promise<Commit[]> {
+    // %G? is appended after %b only when signature verification is requested,
+    // since it forces GPG verification of every commit in the log (slow on
+    // large repos). %b never contains a NUL so the trailing column is unambiguous.
+    const format = '%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b'
+      + (options?.includeSignature ? '%x00%G?' : '');
     const args = [
       'log',
-      '--format=%x01%x02%x03%H%x00%h%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%s%x00%P%x00%D%x00%b',
+      `--format=${format}`,
     ];
 
     if (options?.branches && options.branches.length > 0) {

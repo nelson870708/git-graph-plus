@@ -320,6 +320,7 @@ export class MainPanel {
         case 'getLog': {
           const cfg = vscode.workspace.getConfiguration('gitGraphPlus');
           const sortOrder = cfg.get<'author-date' | 'date' | 'topological'>('graphSortOrder', 'topological');
+          const includeSignature = cfg.get<boolean>('showSignatureStatus', true);
           const requestedLimit = message.payload.limit ?? 1000;
           this.currentLimit = requestedLimit;
           // On first load, apply saved filter if the webview didn't specify one.
@@ -332,7 +333,7 @@ export class MainPanel {
           this.isFirstGetLog = false;
           this.currentRemoteFilter = effectiveFilter;
           this.currentBranchFilter = effectiveBranchFilter;
-          const logPayload = { ...message.payload, remoteFilter: effectiveFilter, branches: effectiveBranchFilter, limit: requestedLimit + 1, sortOrder };
+          const logPayload = { ...message.payload, remoteFilter: effectiveFilter, branches: effectiveBranchFilter, limit: requestedLimit + 1, sortOrder, includeSignature };
           const seq = ++this.logSequence;
           const [allFetched, logBranches] = await Promise.all([
             this.gitService.log(logPayload),
@@ -974,6 +975,11 @@ export class MainPanel {
           }
           break;
         }
+        case 'getCommitSignature': {
+          const signature = await this.gitService.getCommitSignature(message.payload.hash);
+          this.post({ type: 'commitSignatureData', payload: { hash: message.payload.hash, signature } });
+          break;
+        }
         case 'searchCommits': {
           // searchSequence guards against a stale response overwriting a
           // newer one when the user types fast. Same pattern as getLog.
@@ -1541,7 +1547,9 @@ export class MainPanel {
     // would arrive ~immediately after; absorb them so they don't fire a second pass.
     this.fileWatcher.suppress();
     try {
-      const sortOrder = vscode.workspace.getConfiguration('gitGraphPlus').get<'author-date' | 'date' | 'topological'>('graphSortOrder', 'topological');
+      const refreshCfg = vscode.workspace.getConfiguration('gitGraphPlus');
+      const sortOrder = refreshCfg.get<'author-date' | 'date' | 'topological'>('graphSortOrder', 'topological');
+      const includeSignature = refreshCfg.get<boolean>('showSignatureStatus', true);
       const refreshLimit = this.currentLimit || 1000;
       // Until the webview's first getLog establishes this session's filter,
       // mirror the saved filter that getLog will apply (same logic as the
@@ -1553,7 +1561,7 @@ export class MainPanel {
       const remoteFilter = this.isFirstGetLog ? MainPanel.savedRemoteFilter : this.currentRemoteFilter;
       const branchFilter = this.isFirstGetLog ? MainPanel.savedBranchFilter : this.currentBranchFilter;
       const [allFetched, branches, tags, remotes, stashes, worktrees] = await Promise.all([
-        this.gitService.log({ limit: refreshLimit + 1, sortOrder, remoteFilter, branches: branchFilter }),
+        this.gitService.log({ limit: refreshLimit + 1, sortOrder, remoteFilter, branches: branchFilter, includeSignature }),
         this.gitService.branches(),
         this.gitService.tags(),
         this.gitService.remotes(),

@@ -242,3 +242,26 @@ describe('CommitGraph smoke', () => {
     expect(c2.querySelectorAll('.commit-row').length).toBe(2);
   });
 });
+
+describe('CommitGraph signature icon', () => {
+  it('renders a signature icon for good/unverified commits', async () => {
+    commitStore.setData(makeGraphData([
+      { ...makeCommit('h1', 'signed'), signatureStatus: 'good' },
+      { ...makeCommit('h2', 'tampered', ['h1']), signatureStatus: 'unverified' },
+    ]));
+    const { container } = render(CommitGraph, {});
+    await tick();
+    expect(container.querySelector('.sig-icon.sig-icon-good')).toBeTruthy();
+    expect(container.querySelector('.sig-icon.sig-icon-unverified')).toBeTruthy();
+  });
+
+  it('omits the icon for "none" and when signatureStatus is absent', async () => {
+    commitStore.setData(makeGraphData([
+      { ...makeCommit('h1', 'unsigned'), signatureStatus: 'none' },
+      makeCommit('h2', 'no field', ['h1']),
+    ]));
+    const { container } = render(CommitGraph, {});
+    await tick();
+    expect(container.querySelector('.sig-icon')).toBeFalsy();
+  });
+});

@@ -9,6 +9,18 @@ export interface Commit {
   body: string;
   parents: string[];
   refs: Ref[];
+  /** Present only when the graph is fetched with signature verification on. */
+  signatureStatus?: SignatureStatus;
+}
+
+/** Simplified 3-state mapping of git's `%G?` verification codes. */
+export type SignatureStatus = 'good' | 'none' | 'unverified';
+
+/** On-demand signature details for a single commit (Details panel). */
+export interface CommitSignature {
+  status: SignatureStatus;
+  signer?: string;
+  keyId?: string;
 }
 
 export interface PersonInfo {

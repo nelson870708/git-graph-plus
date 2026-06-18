@@ -406,6 +406,11 @@
           "default": "topological",
           "description": "Commit sort order in the graph"
         },
+        "gitGraphPlus.showSignatureStatus": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a GPG/SSH signature status icon next to each commit in the graph. ⚠️ This verifies the signature of every commit in the log, which can slow down loading on very large repositories — turn it off if you notice slow graph loading. The Commit Details panel always shows signature status on demand regardless of this setting."
+        },
         "gitGraphPlus.branchBadgeBarThickness": {
           "type": "string",
           "enum": [
